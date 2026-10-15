@@ -1,0 +1,64 @@
+name: Winlator Mali 14T APK
+
+on:
+  push:
+    branches: [mali-14t]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mali-14t-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Run Java regression checks
+        run: python3 tests/mali-14t/java/run.py app/src/main/java/com/winlator
+      - name: Run native regression checks
+        run: python3 tests/mali-14t/native/run.py app/src/main/cpp/vortekrenderer
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+      - name: Install Android build tools
+        run: sdkmanager "platforms;android-35" "build-tools;34.0.0" "ndk;24.0.8215888" "cmake;3.22.1"
+      - name: Build debug APK
+        run: |
+          set -o pipefail
+          bash ./gradlew --no-daemon --console=plain :app:assembleDebug 2>&1 | tee build-mali-14t.log
+      - name: Prepare downloadable APK
+        run: |
+          mkdir -p artifacts
+          cp app/build/outputs/apk/debug/app-debug.apk artifacts/Winlator-11.2-Mali-14T-experimental.apk
+          cd artifacts
+          sha256sum Winlator-11.2-Mali-14T-experimental.apk > SHA256SUMS.txt
+          printf '%s\n' "Source commit: $GITHUB_SHA" "Experimental debug build; not yet tested on Xiaomi 14T." > BUILD.txt
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Winlator-Mali-14T-${{ github.run_number }}
+          path: artifacts/
+          if-no-files-found: error
+          retention-days: 14
+      - name: Upload build diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-diagnostics-${{ github.run_number }}
+          path: |
+            build-mali-14t.log
+            app/build/outputs/mapping/debug/
+          if-no-files-found: ignore
+          retention-days: 7

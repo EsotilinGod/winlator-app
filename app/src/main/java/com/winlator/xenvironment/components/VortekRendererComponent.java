@@ -1,12 +1,14 @@
 package com.winlator.xenvironment.components;
 
 import android.content.Context;
+import android.util.Log;
 
 import androidx.annotation.Keep;
 
 import com.winlator.contentdialog.VortekConfigDialog;
 import com.winlator.core.GPUHelper;
 import com.winlator.core.GeneralComponents;
+import com.winlator.core.GraphicsCompatibility;
 import com.winlator.core.KeyValueSet;
 import com.winlator.renderer.GPUImage;
 import com.winlator.xconnector.ConnectedClient;
@@ -48,10 +50,7 @@ public class VortekRendererComponent extends EnvironmentComponent implements Con
             if (config == null || config.isEmpty()) return new Options();
 
             Options options = new Options();
-            String exposedDeviceExtensions = config.get("exposedDeviceExtensions", "all");
-            if (!exposedDeviceExtensions.isEmpty() && !exposedDeviceExtensions.equals("all")) {
-                options.exposedDeviceExtensions = exposedDeviceExtensions.split("\\|");
-            }
+            options.exposedDeviceExtensions = GraphicsCompatibility.parseExposedExtensions(config.get("exposedDeviceExtensions", "all"));
 
             String vkMaxVersion = config.get("vkMaxVersion", VortekConfigDialog.DEFAULT_VK_MAX_VERSION);
             if (!vkMaxVersion.equals(VortekConfigDialog.DEFAULT_VK_MAX_VERSION)) {
@@ -64,7 +63,16 @@ public class VortekRendererComponent extends EnvironmentComponent implements Con
             options.resourceMemoryType = (byte)config.getInt("resourceMemoryType");
 
             String adrenotoolsDriver = config.get("adrenotoolsDriver");
-            options.libvulkanPath = GeneralComponents.getDefinitivePath(GeneralComponents.Type.ADRENOTOOLS_DRIVER, context, adrenotoolsDriver);
+            if (GraphicsCompatibility.isMaliRenderer(GPUHelper.glGetRenderer(context))) {
+                // Also enforce this for imported containers and shortcut overrides.
+                options.libvulkanPath = null;
+                if (!adrenotoolsDriver.isEmpty() && !adrenotoolsDriver.equalsIgnoreCase("System")) {
+                    Log.w("WinlatorGPU", "Mali GPU: ignoring custom Adrenotools driver; using system Vulkan");
+                }
+            }
+            else {
+                options.libvulkanPath = GeneralComponents.getDefinitivePath(GeneralComponents.Type.ADRENOTOOLS_DRIVER, context, adrenotoolsDriver);
+            }
             return options;
         }
     }

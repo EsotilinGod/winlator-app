@@ -212,14 +212,19 @@ void vt_handle_vkEnumerateInstanceExtensionProperties(VkContext* context) {
 
 void vt_handle_vkEnumerateDeviceExtensionProperties(VkContext* context) {
     uint64_t physicalDeviceId;
-    uint32_t propertyCount;
+    uint32_t propertyCount = 0;
 
     vt_unserialize_vkEnumerateDeviceExtensionProperties((VkPhysicalDevice)&physicalDeviceId, NULL, &propertyCount, NULL, context->inputBuffer, &context->memoryPool);
     VkPhysicalDevice physicalDevice = VkObject_fromId(physicalDeviceId);
 
     bool nullProperties = propertyCount == 0;
+    uint32_t requestedCapacity = propertyCount;
     VkExtensionProperties* properties = getExposedDeviceExtensionProperties(context, physicalDevice, &propertyCount);
     VkResult result = properties ? VK_SUCCESS : VK_ERROR_OUT_OF_HOST_MEMORY;
+    if (!nullProperties && properties && propertyCount > requestedCapacity) {
+        propertyCount = requestedCapacity;
+        result = VK_INCOMPLETE;
+    }
 
     VT_SERIALIZE_CMD(vkEnumerateDeviceExtensionProperties, NULL, NULL, &propertyCount, !nullProperties ? properties : NULL);
     vt_send(context->clientRing, result, outputBuffer, bufferSize);

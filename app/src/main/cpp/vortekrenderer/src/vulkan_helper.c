@@ -107,6 +107,14 @@ void initVulkanInstance(VkContext* context, VkInstance instance, const VkApplica
 
     setupExposedDeviceExtensions(context);
 
+    println("vortek: host GPU=%s driverID=%u driverVersion=%u Vulkan=%u.%u.%u engine=%s engineVersion=%u",
+            properties2.properties.deviceName, (unsigned int)context->driverID,
+            properties2.properties.driverVersion,
+            VK_VERSION_MAJOR(properties2.properties.apiVersion),
+            VK_VERSION_MINOR(properties2.properties.apiVersion),
+            VK_VERSION_PATCH(properties2.properties.apiVersion),
+            context->engineName ? context->engineName : "unknown", context->engineVersion);
+
 #if ENABLE_VALIDATION_LAYER
     VkDebugReportCallbackCreateInfoEXT debugCreateInfo = {0};
     debugCreateInfo.sType = VK_STRUCTURE_TYPE_DEBUG_REPORT_CREATE_INFO_EXT;
@@ -321,11 +329,13 @@ void disableUnsupportedDeviceFeatures(VkPhysicalDevice physicalDevice, VkDeviceC
 }
 
 VkExtensionProperties* getExposedDeviceExtensionProperties(VkContext* context, VkPhysicalDevice physicalDevice, uint32_t* propertyCount) {
-    uint32_t srcPropertyCount;
+    // Do not leave the caller's requested capacity as an output count on failure.
+    *propertyCount = 0;
+    uint32_t srcPropertyCount = 0;
     VkResult result = vulkanWrapper.vkEnumerateDeviceExtensionProperties(physicalDevice, NULL, &srcPropertyCount, NULL);
     if (result != VK_SUCCESS) return NULL;
 
-    VkExtensionProperties srcProperties[srcPropertyCount];
+    VkExtensionProperties srcProperties[srcPropertyCount > 0 ? srcPropertyCount : 1];
     result = vulkanWrapper.vkEnumerateDeviceExtensionProperties(physicalDevice, NULL, &srcPropertyCount, srcProperties);
     if (result != VK_SUCCESS) return NULL;
 

@@ -78,6 +78,15 @@ public abstract class GraphicsDrivers {
         }
     }
 
+    public static String serializeConfigs(KeyValueSet[] configs) {
+        StringBuilder result = new StringBuilder();
+        for (int i = 0; i < configs.length; i++) {
+            if (i > 0) result.append('|');
+            result.append(configs[i].toString());
+        }
+        return result.toString();
+    }
+
     public static String getDefaultDriver(Context context) {
         return GPUHelper.getAdrenoModelId(context) > 0 ? GraphicsDrivers.TURNIP+","+GraphicsDrivers.DEFAULT_OPENGL_DRIVER : GraphicsDrivers.VORTEK+","+GraphicsDrivers.DEFAULT_OPENGL_DRIVER;
     }

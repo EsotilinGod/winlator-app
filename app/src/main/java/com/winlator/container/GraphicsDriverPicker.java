@@ -47,13 +47,12 @@ public class GraphicsDriverPicker {
     }
 
     public String getGraphicsDriverConfig() {
-        StringBuilder graphicsDriverConfig = new StringBuilder();
+        KeyValueSet[] configs = new KeyValueSet[container.getChildCount()];
         for (int i = 0; i < container.getChildCount(); i++) {
             TaggedSelectionBox taggedSelectionBox = (TaggedSelectionBox)container.getChildAt(i);
-            if (graphicsDriverConfig.length() > 0) graphicsDriverConfig.append('|');
-            graphicsDriverConfig.append(taggedSelectionBox.getTag().toString());
+            configs[i] = new KeyValueSet(taggedSelectionBox.getTag());
         }
-        return graphicsDriverConfig.toString();
+        return GraphicsDrivers.serializeConfigs(configs);
     }
 
     private static void showGraphicsDriverConfigDialog(String graphicsDriver, View anchor) {
