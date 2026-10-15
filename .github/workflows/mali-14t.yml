@@ -28,6 +28,10 @@ jobs:
           java-version: '17'
       - name: Run Java regression checks
         run: python3 tests/mali-14t/java/run.py app/src/main/java/com/winlator
+      - name: Check per-game DLL override merging
+        run: |
+          javac -d /tmp/dinput8-test app/src/main/java/com/winlator/core/DllOverrides.java tests/dinput8/DllOverridesTest.java
+          java -cp /tmp/dinput8-test DllOverridesTest
       - name: Run native regression checks
         run: python3 tests/mali-14t/native/run.py app/src/main/cpp/vortekrenderer
       - name: Set up Android SDK
@@ -65,3 +69,4 @@ jobs:
             app/build/outputs/mapping/debug/
           if-no-files-found: ignore
           retention-days: 7
+

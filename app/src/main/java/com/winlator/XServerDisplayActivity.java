@@ -47,6 +47,7 @@ import com.winlator.contentdialog.WineD3DConfigDialog;
 import com.winlator.core.AppUtils;
 import com.winlator.core.DefaultVersion;
 import com.winlator.core.EnvVars;
+import com.winlator.core.DllOverrides;
 import com.winlator.core.FileUtils;
 import com.winlator.core.GeneralComponents;
 import com.winlator.core.KeyValueSet;
@@ -566,6 +567,9 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
         if (overrideEnvVars != null) {
             envVars.putAll(overrideEnvVars);
             overrideEnvVars = null;
+        }
+        if (shortcut != null && shortcut.getExtra("nativeDinput8", "0").equals("1")) {
+            envVars.put("WINEDLLOVERRIDES", DllOverrides.preferNativeDinput8(envVars.get("WINEDLLOVERRIDES")));
         }
         environment.startEnvironmentComponents();
 

@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="native_dinput8">Usar dinput8.dll del juego (mods)</string>
+    <string name="native_dinput8_help">Coloca el dinput8.dll del parche junto al ejecutable y abre el juego desde este acceso directo. Da prioridad a esa DLL y permite usar la de Wine si no está disponible. No descarga ni copia DLLs.</string>
+</resources>
