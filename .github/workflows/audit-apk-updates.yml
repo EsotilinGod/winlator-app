@@ -1,0 +1,21 @@
+name: Audit APK update compatibility
+on:
+  push:
+    branches: [mali-14t]
+    paths: ['.github/workflows/audit-apk-updates.yml', 'tests/apk-updates/audit.py']
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Compare shipped APK certificates and versions
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 tests/apk-updates/audit.py
