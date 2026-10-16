@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="hud_advanced">Advanced (frame times)</string>
+    <string name="hud_system_ram">System RAM:</string>
+    <string name="hud_cpu_clock">CPU clock:</string>
+    <string name="hud_waiting_frames">Waiting for frames…</string>
+    <string name="hud_timing_values">Mean %1$.1f ms | P99 %2$.1f ms\nPeak %3$.1f ms</string>
+    <string name="hud_timing_legend">Recent mean FPS · Up to 120 window updates\nGraph: 0–100 ms; larger spikes clipped</string>
+</resources>

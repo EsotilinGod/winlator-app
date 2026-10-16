@@ -51,6 +51,10 @@ jobs:
         run: |
           javac -d /tmp/dinput8-test app/src/main/java/com/winlator/core/DllOverrides.java tests/dinput8/DllOverridesTest.java
           java -cp /tmp/dinput8-test DllOverridesTest
+      - name: Check advanced HUD timing calculations
+        run: |
+          javac -d /tmp/hud-tests app/src/main/java/com/winlator/core/FrameTiming.java tests/hud/FrameTimingTest.java
+          java -cp /tmp/hud-tests FrameTimingTest
       - name: Run native regression checks
         run: python3 tests/mali-14t/native/run.py app/src/main/cpp/vortekrenderer
       - name: Check Mali memory and texture cache regressions

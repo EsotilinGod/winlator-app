@@ -154,6 +154,12 @@ public class ContainerDetailFragment extends Fragment {
         vAudioDriverConfig.setOnClickListener((v) -> (new AudioDriverConfigDialog(v)).show());
 
         final Spinner sHUDMode = view.findViewById(R.id.SHUDMode);
+        ArrayList<String> hudModes = new ArrayList<>();
+        for (int i = 0; i < sHUDMode.getAdapter().getCount(); i++)
+            hudModes.add(sHUDMode.getAdapter().getItem(i).toString());
+        hudModes.add(getString(R.string.hud_advanced));
+        ArrayAdapter<String> hudAdapter = new ArrayAdapter<>(context, android.R.layout.simple_spinner_dropdown_item, hudModes);
+        sHUDMode.setAdapter(hudAdapter);
         sHUDMode.setSelection(isEditMode() ? container.getHUDMode() : FrameRating.Mode.DISABLED.ordinal());
 
         final Spinner sStartupSelection = view.findViewById(R.id.SStartupSelection);

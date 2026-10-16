@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="hud_advanced">Avanzado (tiempos por cuadro)</string>
+    <string name="hud_system_ram">RAM sistema:</string>
+    <string name="hud_cpu_clock">Frecuencia CPU:</string>
+    <string name="hud_waiting_frames">Esperando cuadros…</string>
+    <string name="hud_timing_values">Media %1$.1f ms | P99 %2$.1f ms\nPico %3$.1f ms</string>
+    <string name="hud_timing_legend">FPS medios recientes · Hasta 120 actualizaciones\nGráfica: 0–100 ms; picos mayores recortados</string>
+</resources>
