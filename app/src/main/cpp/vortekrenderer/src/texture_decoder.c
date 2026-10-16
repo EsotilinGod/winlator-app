@@ -79,6 +79,7 @@ static void internalDestroyImage(VkDevice device, TextureDecoder_Image* targetIm
 }
 
 static bool readCachedImage(TextureDecoder_Image* image, uint64_t hash, void* result) {
+    if (!result) return false;
     char filename[128] = {0};
     sprintf(filename, CACHE_DIR "/%lx-%dx%d-%d.imd", hash, image->width, image->height, image->format);
 
@@ -160,6 +161,7 @@ static void destroyDecodeBuffer(TextureDecoder* textureDecoder) {
         vulkanWrapper.vkFreeMemory(textureDecoder->device, textureDecoder->memory, NULL);
         textureDecoder->memory = NULL;
     }
+    textureDecoder->bufferSize = 0;
 }
 
 static bool createDecodeBuffer(TextureDecoder* textureDecoder, uint32_t dataSize) {
@@ -180,8 +182,11 @@ static bool createDecodeBuffer(TextureDecoder* textureDecoder, uint32_t dataSize
 
     VkMemoryAllocateInfo allocateInfo = {0};
     allocateInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-    allocateInfo.allocationSize = textureDecoder->bufferSize = memReqs.size;
-    allocateInfo.memoryTypeIndex = getMemoryTypeIndex(memReqs.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+    allocateInfo.allocationSize = memReqs.size;
+    // CPU writes are submitted without flushing: require coherent memory.
+    allocateInfo.memoryTypeIndex = getMemoryTypeIndex(memReqs.memoryTypeBits,
+            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+    if (allocateInfo.memoryTypeIndex == UINT32_MAX) goto error;
 
     VkDeviceMemory memory;
     result = vulkanWrapper.vkAllocateMemory(textureDecoder->device, &allocateInfo, NULL, &memory);
@@ -191,8 +196,10 @@ static bool createDecodeBuffer(TextureDecoder* textureDecoder, uint32_t dataSize
     result = vulkanWrapper.vkBindBufferMemory(textureDecoder->device, buffer, memory, 0);
     if (result != VK_SUCCESS) goto error;
 
-    result = vulkanWrapper.vkMapMemory(textureDecoder->device, memory, 0, textureDecoder->bufferSize, 0, &textureDecoder->decompressedData);
+    result = vulkanWrapper.vkMapMemory(textureDecoder->device, memory, 0, memReqs.size, 0, &textureDecoder->decompressedData);
     if (result != VK_SUCCESS) goto error;
+    // Allocation padding does not increase the size of the VkBuffer.
+    textureDecoder->bufferSize = dataSize;
     return true;
 
 error:
@@ -289,20 +296,37 @@ void TextureDecoder_decodeAll(TextureDecoder* textureDecoder) {
         bool isNoAlphaU;
         getBCInfo(dstImage->format, &bcN, &blockSize, &isNoAlphaU);
 
+        uint64_t imageSize = (uint64_t)region->imageExtent.width * region->imageExtent.height * 4;
+        if (!imageSize || imageSize > UINT32_MAX ||
+                ((!textureDecoder->decompressedData || imageSize > textureDecoder->bufferSize) &&
+                 !createDecodeBuffer(textureDecoder, (uint32_t)imageSize))) {
+            munmap(bufferData, srcBuffer->memory->allocationSize);
+            goto out;
+        }
+
         uint64_t hash = 0;
         bool isCachedImage = false;
-        if (region->imageExtent.width >= CACHE_MIN_IMAGE_WIDTH && region->imageExtent.height >= CACHE_MIN_IMAGE_WIDTH) {
+        // Existing cache keys describe whole tightly packed 2D images only.
+        bool useCache = textureDecoder->imageCacheSize > 0 &&
+                region->imageExtent.width == dstImage->width &&
+                region->imageExtent.height == dstImage->height &&
+                region->imageExtent.depth == 1 && region->imageSubresource.layerCount == 1 &&
+                region->imageSubresource.mipLevel == 0 &&
+                region->imageOffset.x == 0 && region->imageOffset.y == 0 && region->imageOffset.z == 0 &&
+                (region->bufferRowLength == 0 || region->bufferRowLength == region->imageExtent.width) &&
+                (region->bufferImageHeight == 0 || region->bufferImageHeight == region->imageExtent.height) &&
+                region->imageExtent.width >= CACHE_MIN_IMAGE_WIDTH &&
+                region->imageExtent.height >= CACHE_MIN_IMAGE_WIDTH &&
+                region->imageExtent.width % 4 == 0 && region->imageExtent.height % 4 == 0;
+        if (useCache) {
             int memorySize = (region->imageExtent.width / 4) * (region->imageExtent.height / 4) * blockSize;
             hash = murmurHash64(imageData, memorySize, dstImage->format);
             isCachedImage = readCachedImage(dstImage, hash, textureDecoder->decompressedData);
         }
 
         if (!isCachedImage) {
-            int imageSize = region->imageExtent.width * region->imageExtent.height * 4;
-            if (imageSize > textureDecoder->bufferSize) createDecodeBuffer(textureDecoder, imageSize);
-
             BCDecoder_decode(imageData, textureDecoder->decompressedData, region->imageExtent.width, region->imageExtent.height, bcN, isNoAlphaU, textureDecoder->threadPool);
-            if (hash > 0) writeImageToCache(textureDecoder, dstImage, hash);
+            if (useCache) writeImageToCache(textureDecoder, dstImage, hash);
         }
 
         munmap(bufferData, srcBuffer->memory->allocationSize);

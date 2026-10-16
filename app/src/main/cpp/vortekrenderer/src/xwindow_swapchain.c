@@ -14,7 +14,8 @@ static AHardwareBuffer* getWindowHardwareBuffer(JMethods* jmethods, int windowId
 static VkResult createImageMemory(VkDevice device, VkImage image, AHardwareBuffer* hardwareBuffer, VkDeviceMemory* pMemory) {
     VkAndroidHardwareBufferPropertiesANDROID ahbProperties = {0};
     ahbProperties.sType = VK_STRUCTURE_TYPE_ANDROID_HARDWARE_BUFFER_PROPERTIES_ANDROID;
-    vulkanWrapper.vkGetAndroidHardwareBufferPropertiesANDROID(device, hardwareBuffer, &ahbProperties);
+    VkResult result = vulkanWrapper.vkGetAndroidHardwareBufferPropertiesANDROID(device, hardwareBuffer, &ahbProperties);
+    if (result != VK_SUCCESS) return result;
 
     VkImportAndroidHardwareBufferInfoANDROID memoryImportInfo = {0};
     memoryImportInfo.sType = VK_STRUCTURE_TYPE_IMPORT_ANDROID_HARDWARE_BUFFER_INFO_ANDROID;
@@ -32,12 +33,17 @@ static VkResult createImageMemory(VkDevice device, VkImage image, AHardwareBuffe
     memoryInfo.allocationSize = ahbProperties.allocationSize;
     memoryInfo.memoryTypeIndex = getMemoryTypeIndex(ahbProperties.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
+    if (memoryInfo.memoryTypeIndex == UINT32_MAX) return VK_ERROR_FEATURE_NOT_PRESENT;
+
     VkDeviceMemory memory;
-    VkResult result = vulkanWrapper.vkAllocateMemory(device, &memoryInfo, NULL, &memory);
+    result = vulkanWrapper.vkAllocateMemory(device, &memoryInfo, NULL, &memory);
     if (result != VK_SUCCESS) return result;
 
     result = vulkanWrapper.vkBindImageMemory(device, image, memory, 0);
-    if (result != VK_SUCCESS) return result;
+    if (result != VK_SUCCESS) {
+        vulkanWrapper.vkFreeMemory(device, memory, NULL);
+        return result;
+    }
 
     *pMemory = memory;
     return VK_SUCCESS;
@@ -46,6 +52,8 @@ static VkResult createImageMemory(VkDevice device, VkImage image, AHardwareBuffe
 static VkResult createImage(VkDevice device, XWindowSwapchain* swapchain, XWindowSwapchain_Image* swapchainImage) {
     jboolean useHALPixelFormatBGRA8888 = swapchain->imageFormat == VK_FORMAT_B8G8R8A8_UNORM || swapchain->imageFormat == VK_FORMAT_B8G8R8A8_SRGB;
     AHardwareBuffer* hardwareBuffer = getWindowHardwareBuffer(swapchain->jmethods, swapchain->windowId, useHALPixelFormatBGRA8888);
+
+    if (!hardwareBuffer) return VK_ERROR_OUT_OF_DEVICE_MEMORY;
 
     AHardwareBuffer_Desc ahbDesc = {0};
     AHardwareBuffer_describe(hardwareBuffer, &ahbDesc);
@@ -84,7 +92,10 @@ static VkResult createImage(VkDevice device, XWindowSwapchain* swapchain, XWindo
     if (result != VK_SUCCESS) return result;
 
     result = createImageMemory(device, image, hardwareBuffer, &memory);
-    if (result != VK_SUCCESS) return result;
+    if (result != VK_SUCCESS) {
+        vulkanWrapper.vkDestroyImage(device, image, NULL);
+        return result;
+    }
 
     swapchainImage->image = image;
     swapchainImage->memory = memory;

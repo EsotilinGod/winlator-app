@@ -107,7 +107,8 @@ ResourceMemory* ResourceMemory_allocate(VkContext* context, VkDevice device, VkM
         }
         else {
             if ((getMemoryPropertyFlags(memoryInfo->memoryTypeIndex) & VK_MEMORY_PROPERTY_HOST_CACHED_BIT)) {
-                memoryInfo->memoryTypeIndex = getMemoryTypeIndex(0x7FFFFFFF, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+                memoryInfo->memoryTypeIndex = getMemoryTypeIndex(UINT32_MAX, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+                if (memoryInfo->memoryTypeIndex == UINT32_MAX) goto error;
             }
 
             bool useExternalMemoryAHB = !hasExternalMemoryDMABuf;
@@ -140,7 +141,9 @@ ResourceMemory* ResourceMemory_allocate(VkContext* context, VkDevice device, VkM
                 resourceMemory->hardwareBuffer = hardwareBuffer;
 
                 int fd = AHardwareBuffer_getFd(hardwareBuffer);
-                if (fd <= 0) goto error;
+                if (fd < 0) goto error;
+                resourceMemory->fd = dup(fd);
+                if (resourceMemory->fd < 0) goto error;
 
                 VkImportAndroidHardwareBufferInfoANDROID memoryImportInfo = {0};
                 memoryImportInfo.sType = VK_STRUCTURE_TYPE_IMPORT_ANDROID_HARDWARE_BUFFER_INFO_ANDROID;
@@ -149,7 +152,6 @@ ResourceMemory* ResourceMemory_allocate(VkContext* context, VkDevice device, VkM
                 memoryInfo->pNext = &memoryImportInfo;
                 result = vulkanWrapper.vkAllocateMemory(device, memoryInfo, NULL, &resourceMemory->memory);
                 if (result != VK_SUCCESS) goto error;
-                resourceMemory->fd = fd;
             }
         }
     }

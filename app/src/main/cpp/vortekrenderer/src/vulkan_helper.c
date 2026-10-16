@@ -18,13 +18,20 @@ static bool isExternalMemoryHandleTypeSupported(VkPhysicalDevice physicalDevice,
     VkPhysicalDeviceExternalBufferInfo bufferInfo = {0};
     bufferInfo.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTERNAL_BUFFER_INFO;
     bufferInfo.handleType = handleType;
+    bufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+            VK_BUFFER_USAGE_UNIFORM_TEXEL_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_TEXEL_BUFFER_BIT |
+            VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
+            VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT |
+            VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT;
 
     VkExternalBufferProperties bufferProperties = {0};
     bufferProperties.sType = VK_STRUCTURE_TYPE_EXTERNAL_BUFFER_PROPERTIES;
     vulkanWrapper.vkGetPhysicalDeviceExternalBufferProperties(physicalDevice, &bufferInfo, &bufferProperties);
     VkExternalMemoryProperties* memoryProperties = &bufferProperties.externalMemoryProperties;
 
-    return (memoryProperties->externalMemoryFeatures & (VK_EXTERNAL_MEMORY_FEATURE_IMPORTABLE_BIT | VK_EXTERNAL_MEMORY_FEATURE_EXPORTABLE_BIT)) != 0 &&
+    VkExternalMemoryFeatureFlags requiredFeature = handleType == VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_FD_BIT
+            ? VK_EXTERNAL_MEMORY_FEATURE_EXPORTABLE_BIT : VK_EXTERNAL_MEMORY_FEATURE_IMPORTABLE_BIT;
+    return (memoryProperties->externalMemoryFeatures & requiredFeature) != 0 &&
            (memoryProperties->compatibleHandleTypes & handleType) != 0;
 }
 
@@ -152,10 +159,10 @@ void initVulkanDevice(VkContext* context, VkPhysicalDevice physicalDevice, VkDev
 
 uint32_t getMemoryTypeIndex(uint32_t typeBits, VkFlags properties) {
     for (uint32_t i = 0; i < deviceMemoryInfo.memoryTypeCount; i++) {
-        if ((typeBits & 1) && (deviceMemoryInfo.memoryTypes[i].propertyFlags & properties)) return i;
+        if ((typeBits & 1) && (deviceMemoryInfo.memoryTypes[i].propertyFlags & properties) == properties) return i;
         typeBits >>= 1;
     }
-    return 0;
+    return UINT32_MAX;
 }
 
 uint32_t getMemoryPropertyFlags(uint32_t memoryTypeIndex) {
