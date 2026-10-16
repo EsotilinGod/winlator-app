@@ -1,10 +1,17 @@
 """Read-only audit of released CI artifacts; never reads private signing keys."""
 import json, os, pathlib, re, subprocess, tempfile, urllib.request, zipfile
 
+class ArtifactRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        redirected = super().redirect_request(req, fp, code, msg, headers, newurl)
+        if redirected is not None:
+            redirected.remove_header('Authorization')
+        return redirected
+
 def api(path):
     req = urllib.request.Request('https://api.github.com/repos/EsotilinGod/winlator-app/' + path,
         headers={'Authorization': 'Bearer ' + os.environ['GH_TOKEN'], 'Accept': 'application/vnd.github+json'})
-    return urllib.request.urlopen(req, timeout=120).read()
+    return urllib.request.build_opener(ArtifactRedirect()).open(req, timeout=120).read()
 
 sdk = pathlib.Path(os.environ['ANDROID_HOME'])
 signer = sorted(sdk.glob('build-tools/*/apksigner'))[-1]
