@@ -26,6 +26,25 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+      - name: Restore permanent experimental signing key
+        env:
+          WINLATOR_DEBUG_KEYSTORE_BASE64: ${{ secrets.WINLATOR_DEBUG_KEYSTORE_BASE64 }}
+        run: |
+          set -euo pipefail
+          if [ -z "$WINLATOR_DEBUG_KEYSTORE_BASE64" ]; then
+            echo "::error::Configure the repository secret WINLATOR_DEBUG_KEYSTORE_BASE64. Refusing to generate another temporary signing key."
+            exit 1
+          fi
+          python3 - <<'PY'
+          import base64, os
+          from pathlib import Path
+          key_path = Path.home() / ".android" / "debug.keystore"
+          key_path.parent.mkdir(parents=True, exist_ok=True)
+          key_path.write_bytes(base64.b64decode(os.environ["WINLATOR_DEBUG_KEYSTORE_BASE64"].strip(), validate=True))
+          key_path.chmod(0o600)
+          PY
+          keytool -certreq -alias androiddebugkey -keystore "$HOME/.android/debug.keystore" -storepass android -keypass android -file "$RUNNER_TEMP/signing-check.csr"
+          rm -f "$RUNNER_TEMP/signing-check.csr"
       - name: Run Java regression checks
         run: python3 tests/mali-14t/java/run.py app/src/main/java/com/winlator
       - name: Check per-game DLL override merging
@@ -52,6 +71,9 @@ jobs:
           cd artifacts
           sha256sum Winlator-11.2-Mali-14T-experimental.apk > SHA256SUMS.txt
           printf '%s\n' "Source commit: $GITHUB_SHA" "Experimental debug build; not yet tested on Xiaomi 14T." > BUILD.txt
+      - name: Record APK signing certificate
+        run: |
+          "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify --verbose --print-certs artifacts/Winlator-11.2-Mali-14T-experimental.apk > artifacts/SIGNING-CERTIFICATE.txt
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
@@ -70,3 +92,6 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
+      - name: Remove signing key from runner
+        if: always()
+        run: rm -f "$HOME/.android/debug.keystore" "$RUNNER_TEMP/signing-check.csr"
