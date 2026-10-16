@@ -2,6 +2,7 @@
 #define VORTEK_TEXTURE_DECODER_H
 
 #include "vortek.h"
+#include "bc_layout.h"
 
 typedef struct TextureDecoder_Image {
     VkImage image;

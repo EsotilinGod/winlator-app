@@ -391,8 +391,9 @@ VkExtensionProperties* getExposedDeviceExtensionProperties(VkContext* context, V
 }
 
 void checkFormatProperties(VkPhysicalDevice physicalDevice, VkFormat format, VkFormatProperties* formatProperties) {
-    if (isCompressedFormat(format) && formatProperties->linearTilingFeatures == 0 && formatProperties->optimalTilingFeatures == 0) {
-        vulkanWrapper.vkGetPhysicalDeviceFormatProperties(physicalDevice, DECOMPRESSED_FORMAT, formatProperties);
+    VkFormat decodedFormat = BCDecoder_outputFormat(format);
+    if (decodedFormat != VK_FORMAT_UNDEFINED && formatProperties->linearTilingFeatures == 0 && formatProperties->optimalTilingFeatures == 0) {
+        vulkanWrapper.vkGetPhysicalDeviceFormatProperties(physicalDevice, decodedFormat, formatProperties);
     }
     else if (isFormatScaled(format)) {
         formatProperties->bufferFeatures |= VK_FORMAT_FEATURE_VERTEX_BUFFER_BIT;

@@ -831,7 +831,7 @@ void vt_handle_vkCreateImageView(VkContext* context) {
     VkDevice device = VkObject_fromId(deviceId);
 
     if (context->textureDecoder && TextureDecoder_isFormatSupported(context->textureDecoder, createInfo.format)) {
-        createInfo.format = DECOMPRESSED_FORMAT;
+        createInfo.format = BCDecoder_outputFormat(createInfo.format);
     }
 
     VkImageView view;

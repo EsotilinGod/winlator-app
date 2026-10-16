@@ -5,6 +5,7 @@
 
 #define BC_BLOCK 4u
 #define BC_DECODER_MAX_TASKS 8
+#define BC_DECODER_MIN_BLOCKS_PER_TASK 1024
 #define BC_ROUNDUP(x) (x + (-x & 3))
 #define BC_ROUNDDOWN(x) (x & ~3)
 
@@ -20,6 +21,7 @@ typedef struct BCTask {
     uint16_t width;
     uint16_t startY;
     uint16_t endY;
+    size_t sourceRowPitch;
     uint8_t bcN;
     bool isAlpha;
     bool isSigned;
@@ -27,7 +29,7 @@ typedef struct BCTask {
 
 static inline uint32_t BCDecoder_getColorIdx(const BCColor* color, int i) {
     int offset = i << 1;
-    return (color->idx & (0x3 << offset)) >> offset;
+    return (color->idx >> offset) & 0x3u;
 }
 
 static inline uint8_t BCDecoder_getChannelIdx(uint64_t data, int i) {
@@ -64,6 +66,9 @@ static inline void BCDecoder_decodeChannel(uint64_t data, uint8_t* dst, int x, i
     if (isSigned) {
         c[0] = (int8_t)(data & 0xFF);
         c[1] = (int8_t)((data & 0xFF00) >> 8);
+        // BC SNORM defines -128 as -127, including before interpolation.
+        if (c[0] == -128) c[0] = -127;
+        if (c[1] == -128) c[1] = -127;
     }
     else {
         c[0] = (uint8_t)(data & 0xFF);
@@ -80,7 +85,7 @@ static inline void BCDecoder_decodeChannel(uint64_t data, uint8_t* dst, int x, i
             c[i] = ((6 - i) * c[0] + (i - 1) * c[1]) / 5;
         }
 
-        c[6] = isSigned ? -128 : 0;
+        c[6] = isSigned ? -127 : 0;
         c[7] = isSigned ?  127 : 255;
     }
 
@@ -128,105 +133,91 @@ static inline void BCDecoder_decodeColor(const BCColor* color, uint8_t* dst, int
 }
 
 static inline void BCDecoder_decodeThread(void* param) {
-    BCTask* task = param;
+    const BCTask* task = param;
     const int stride = task->width * 4;
-    const int dx = 4 * BC_BLOCK;
-    const int dy = stride * BC_BLOCK;
+    const int blockSize = (task->bcN == 1 || task->bcN == 4) ? 8 : 16;
 
-    switch (task->bcN) {
-        case 1: {
-            const BCColor* color = (const BCColor*)task->src;
-            for (int x, y = task->startY; y < task->endY; y += BC_BLOCK, task->dst += dy) {
-                uint8_t* dstRow = task->dst;
-                for (x = 0; x < task->width; x += BC_BLOCK, color++, dstRow += dx) {
-                    BCDecoder_decodeColor(color, dstRow, x, y, task->width, task->endY, stride, task->isAlpha, false);
+    for (int y = task->startY; y < task->endY; y += BC_BLOCK) {
+        const uint8_t* row = task->src + ((y - task->startY) / BC_BLOCK) * task->sourceRowPitch;
+        uint8_t* dstRow = task->dst + (y - task->startY) * stride;
+        for (int x = 0; x < task->width; x += BC_BLOCK) {
+            const uint8_t* block = row + (x / BC_BLOCK) * blockSize;
+            uint8_t* dst = dstRow + x * 4;
+            BCColor color;
+            uint64_t first, second;
+            // A Vulkan buffer offset need not have uint64_t alignment.
+            memcpy(&first, block, sizeof(first));
+            if (task->bcN <= 3) {
+                memcpy(&color, block + (task->bcN == 1 ? 0 : 8), sizeof(color));
+                BCDecoder_decodeColor(&color, dst, x, y, task->width, task->endY,
+                        stride, task->isAlpha, task->bcN != 1);
+                if (task->bcN == 2)
+                    BCDecoder_decodeAlpha(first, dst, x, y, task->width, task->endY, stride);
+                else if (task->bcN == 3)
+                    BCDecoder_decodeChannel(first, dst, x, y, task->width, task->endY, stride, 3, false);
+            }
+            else {
+                // BC4/5 use RGBA output; missing channels are (0, 0, 1).
+                for (int j = 0; j < BC_BLOCK && y + j < task->endY; j++) {
+                    for (int i = 0; i < BC_BLOCK && x + i < task->width; i++) {
+                        uint8_t* pixel = dst + j * stride + i * 4;
+                        pixel[0] = pixel[1] = pixel[2] = 0;
+                        pixel[3] = task->isSigned ? 127 : 255;
+                    }
+                }
+                BCDecoder_decodeChannel(first, dst, x, y, task->width, task->endY, stride, 0, task->isSigned);
+                if (task->bcN == 5) {
+                    memcpy(&second, block + 8, sizeof(second));
+                    BCDecoder_decodeChannel(second, dst, x, y, task->width, task->endY, stride, 1, task->isSigned);
                 }
             }
-            break;
-        }
-        case 2: {
-            const uint64_t* alpha = (const uint64_t*)task->src;
-            const BCColor* color = (const BCColor*)(task->src + 8);
-            for (int x, y = task->startY; y < task->endY; y += BC_BLOCK, task->dst += dy) {
-                uint8_t* dstRow = task->dst;
-                for (x = 0; x < task->width; x += BC_BLOCK, alpha += 2, color += 2, dstRow += dx) {
-                    BCDecoder_decodeColor(color, dstRow, x, y, task->width, task->endY, stride, task->isAlpha, true);
-                    BCDecoder_decodeAlpha(*alpha, dstRow, x, y, task->width, task->endY, stride);
-                }
-            }
-            break;
-        }
-        case 3: {
-            const uint64_t* alpha = (const uint64_t*)task->src;
-            const BCColor* color = (const BCColor*)(task->src + 8);
-            for (int x, y = task->startY; y < task->endY; y += BC_BLOCK, task->dst += dy) {
-                uint8_t* dstRow = task->dst;
-                for (x = 0; x < task->width; x += BC_BLOCK, alpha += 2, color += 2, dstRow += dx) {
-                    BCDecoder_decodeColor(color, dstRow, x, y, task->width, task->endY, stride, task->isAlpha, true);
-                    BCDecoder_decodeChannel(*alpha, dstRow, x, y, task->width, task->endY, stride, 3, task->isSigned);
-                }
-            }
-            break;
-        }
-        case 4: {
-            const uint64_t* red = (const uint64_t*)task->src;
-            for (int x, y = task->startY; y < task->endY; y += BC_BLOCK, task->dst += dy) {
-                uint8_t* dstRow = task->dst;
-                for (x = 0; x < task->width; x += BC_BLOCK, red++, dstRow += dx) {
-                    BCDecoder_decodeChannel(*red, dstRow, x, y, task->width, task->endY, stride, 0, task->isSigned);
-                }
-            }
-            break;
-        }
-        case 5: {
-            const uint64_t* red = (const uint64_t*)task->src;
-            const uint64_t* green = (const uint64_t*)(task->src + 8);
-            for (int x, y = task->startY; y < task->endY; y += BC_BLOCK, task->dst += dy) {
-                uint8_t* dstRow = task->dst;
-                for (x = 0; x < task->width; x += BC_BLOCK, red += 2, green += 2, dstRow += dx) {
-                    BCDecoder_decodeChannel(*red, dstRow, x, y, task->width, task->endY, stride, 0, task->isSigned);
-                    BCDecoder_decodeChannel(*green, dstRow, x, y, task->width, task->endY, stride, 1, task->isSigned);
-                }
-            }
-            break;
         }
     }
 }
 
-static inline void BCDecoder_decode(const uint8_t* src, uint8_t* dst, int width, int height, int bcN, bool isNoAlphaU, ThreadPool* threadPool) {
+static inline void BCDecoder_decodePitched(const uint8_t* src, uint8_t* dst, int width, int height,
+        int bcN, bool isNoAlphaU, size_t sourceRowPitch, ThreadPool* threadPool) {
+    if (width <= 0 || height <= 0 || width > UINT16_MAX || height > UINT16_MAX || bcN < 1 || bcN > 5) return;
     const bool isAlpha = (bcN == 1) && !isNoAlphaU;
     const bool isSigned = (bcN == 4 || bcN == 5) && !isNoAlphaU;
     const int stride = width * 4;
-    const int dy = stride * BC_BLOCK;
-    const int skipWidth = BC_ROUNDUP(width) / BC_BLOCK;
-    const int blockSize = bcN == 1 ? 8 : 16;
+    const int blockRows = (height + 3) / 4;
+    const int blockColumns = (width + 3) / 4;
+    const int blockSize = (bcN == 1 || bcN == 4) ? 8 : 16;
+    if (sourceRowPitch < (size_t)blockColumns * blockSize) return;
 
-    int minTasks = height >= 256 ? BC_DECODER_MAX_TASKS : BC_DECODER_MAX_TASKS / 2;
-    int numTasks = threadPool && height >= 128 ? MIN(minTasks, threadPool->numThreads) : 1;
-    BCTask* tasks = calloc(numTasks, sizeof(BCTask));
-
-    int chunkHeight = BC_ROUNDDOWN(height / numTasks);
+    // Tiny and narrow mip levels stay on the caller: no heap allocation or
+    // worker wakeups. Large images keep bounded parallel decoding.
+    int numTasks = 1;
+    if (threadPool && threadPool->numThreads > 1) {
+        numTasks = MIN(BC_DECODER_MAX_TASKS, threadPool->numThreads);
+        numTasks = MIN(numTasks, blockRows);
+        numTasks = MIN(numTasks, (blockRows * blockColumns) / BC_DECODER_MIN_BLOCKS_PER_TASK);
+        if (numTasks < 1) numTasks = 1;
+    }
+    BCTask tasks[BC_DECODER_MAX_TASKS] = {0};
+    const int rowsPerTask = blockRows / numTasks;
     for (int i = 0; i < numTasks; i++) {
-        BCTask* task = tasks + i;
+        BCTask* task = &tasks[i];
         task->bcN = bcN;
         task->width = width;
-        task->startY = i * chunkHeight;
-        task->endY = i < numTasks-1 ? task->startY + chunkHeight : height;
+        task->startY = i * rowsPerTask * BC_BLOCK;
+        task->endY = i < numTasks - 1 ? task->startY + rowsPerTask * BC_BLOCK : height;
         task->isAlpha = isAlpha;
         task->isSigned = isSigned;
-
-        int skipHeight = BC_ROUNDUP(task->startY) / BC_BLOCK;
-        task->src = src + (skipHeight * skipWidth * blockSize);
-        task->dst = dst + (skipHeight * dy);
-
-        if (numTasks > 1) {
-            ThreadPool_run(threadPool, BCDecoder_decodeThread, task);
-        }
+        task->sourceRowPitch = sourceRowPitch;
+        task->src = src + (task->startY / BC_BLOCK) * sourceRowPitch;
+        task->dst = dst + (size_t)task->startY * stride;
+        if (numTasks > 1) ThreadPool_run(threadPool, BCDecoder_decodeThread, task);
         else BCDecoder_decodeThread(task);
     }
-
     if (numTasks > 1) ThreadPool_wait(threadPool);
-    free(tasks);
 }
 
+static inline void BCDecoder_decode(const uint8_t* src, uint8_t* dst, int width, int height,
+        int bcN, bool isNoAlphaU, ThreadPool* threadPool) {
+    const int blockSize = (bcN == 1 || bcN == 4) ? 8 : 16;
+    BCDecoder_decodePitched(src, dst, width, height, bcN, isNoAlphaU,
+            ((size_t)width + 3) / 4 * blockSize, threadPool);
+}
 #endif

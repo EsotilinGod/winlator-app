@@ -8,7 +8,7 @@
 #include "string_utils.h"
 #include "file_utils.h"
 
-#define CACHE_DIR APP_CACHE_DIR "/vortek"
+#define CACHE_DIR APP_CACHE_DIR "/vortek-bc2"
 #define CACHE_MIN_IMAGE_WIDTH 1024
 
 #define VK_FORMAT_BC_FLAG(f) (1 << (f - VK_FORMAT_BC1_RGB_UNORM_BLOCK))
@@ -143,7 +143,8 @@ static uint32_t getDeviceSupportedFormats(VkPhysicalDevice physicalDevice) {
     for (int i = 0; i < ARRAY_SIZE(formats); i++) {
         VkFormatProperties formatProperties = {0};
         vulkanWrapper.vkGetPhysicalDeviceFormatProperties(physicalDevice, formats[i], &formatProperties);
-        if (formatProperties.optimalTilingFeatures > 0) flags |= VK_FORMAT_BC_FLAG(formats[i]);
+        if (formatProperties.optimalTilingFeatures & VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT)
+            flags |= VK_FORMAT_BC_FLAG(formats[i]);
     }
     return flags;
 }
@@ -261,7 +262,8 @@ TextureDecoder* TextureDecoder_create(VkContext* context, VkPhysicalDevice physi
     textureDecoder->threadPool = context->threadPool;
 
     createCopyCommandBuffer(textureDecoder, context->graphicsQueueIndex);
-    if (context->driverID == VK_DRIVER_ID_SAMSUNG_PROPRIETARY) textureDecoder->deviceSupportedFormats = getDeviceSupportedFormats(physicalDevice);
+    // Some drivers support individual BC formats without the full BC feature.
+    textureDecoder->deviceSupportedFormats = getDeviceSupportedFormats(physicalDevice);
     return textureDecoder;
 }
 
@@ -284,22 +286,25 @@ void TextureDecoder_decodeAll(TextureDecoder* textureDecoder) {
         TextureDecoder_Image* dstImage = bufferImageCopy->dstImage;
         if (!srcBuffer || !dstImage) goto out;
 
-        void* bufferData = mmap(NULL, srcBuffer->memory->allocationSize, PROT_READ, MAP_SHARED, srcBuffer->memory->fd, 0);
-        if (bufferData == MAP_FAILED) goto out;
-
         VkBufferImageCopy* region = &bufferImageCopy->region;
-        void* imageData = bufferData + (srcBuffer->memoryOffset + region->bufferOffset);
-        region->bufferOffset = 0;
-
         int blockSize;
         int bcN;
         bool isNoAlphaU;
         getBCInfo(dstImage->format, &bcN, &blockSize, &isNoAlphaU);
 
-        uint64_t imageSize = (uint64_t)region->imageExtent.width * region->imageExtent.height * 4;
-        if (!imageSize || imageSize > UINT32_MAX ||
-                ((!textureDecoder->decompressedData || imageSize > textureDecoder->bufferSize) &&
-                 !createDecodeBuffer(textureDecoder, (uint32_t)imageSize))) {
+        uint64_t allocationSize = srcBuffer->memory->allocationSize;
+        if (srcBuffer->memoryOffset > allocationSize ||
+                region->bufferOffset > allocationSize - srcBuffer->memoryOffset) goto out;
+        uint64_t sourceOffset = srcBuffer->memoryOffset + region->bufferOffset;
+        BCUploadLayout layout;
+        if (!BCUploadLayout_get(region, blockSize, allocationSize - sourceOffset, &layout)) goto out;
+
+        void* bufferData = mmap(NULL, allocationSize, PROT_READ, MAP_SHARED, srcBuffer->memory->fd, 0);
+        if (bufferData == MAP_FAILED) goto out;
+        const uint8_t* imageData = (const uint8_t*)bufferData + sourceOffset;
+
+        if ((!textureDecoder->decompressedData || layout.outputSize > textureDecoder->bufferSize) &&
+                !createDecodeBuffer(textureDecoder, layout.outputSize)) {
             munmap(bufferData, srcBuffer->memory->allocationSize);
             goto out;
         }
@@ -320,16 +325,26 @@ void TextureDecoder_decodeAll(TextureDecoder* textureDecoder) {
                 region->imageExtent.width % 4 == 0 && region->imageExtent.height % 4 == 0;
         if (useCache) {
             int memorySize = (region->imageExtent.width / 4) * (region->imageExtent.height / 4) * blockSize;
-            hash = murmurHash64(imageData, memorySize, dstImage->format);
+            hash = murmurHash64((void*)imageData, memorySize, dstImage->format);
             isCachedImage = readCachedImage(dstImage, hash, textureDecoder->decompressedData);
         }
 
         if (!isCachedImage) {
-            BCDecoder_decode(imageData, textureDecoder->decompressedData, region->imageExtent.width, region->imageExtent.height, bcN, isNoAlphaU, textureDecoder->threadPool);
+            for (uint32_t slice = 0; slice < layout.slices; slice++) {
+                BCDecoder_decodePitched(imageData + slice * layout.sourceSlicePitch,
+                        (uint8_t*)textureDecoder->decompressedData + slice * layout.outputSliceSize,
+                        region->imageExtent.width, region->imageExtent.height, bcN, isNoAlphaU,
+                        layout.sourceRowPitch, textureDecoder->threadPool);
+            }
             if (useCache) writeImageToCache(textureDecoder, dstImage, hash);
         }
 
         munmap(bufferData, srcBuffer->memory->allocationSize);
+
+        // The staging buffer now contains tight uncompressed rows and layers.
+        region->bufferOffset = 0;
+        region->bufferRowLength = 0;
+        region->bufferImageHeight = 0;
 
         VkCommandBufferBeginInfo beginInfo = {0};
         beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -402,14 +417,14 @@ VkResult TextureDecoder_createImage(TextureDecoder* textureDecoder, VkImageCreat
     newImage->width = imageInfo->extent.width;
     newImage->height = imageInfo->extent.height;
 
-    imageInfo->format = DECOMPRESSED_FORMAT;
+    imageInfo->format = BCDecoder_outputFormat(newImage->format);
     imageInfo->flags &= ~VK_IMAGE_CREATE_BLOCK_TEXEL_VIEW_COMPATIBLE_BIT;
 
     VkImageFormatListCreateInfo* formatListInfo = findNextVkStructure(imageInfo->pNext, VK_STRUCTURE_TYPE_IMAGE_FORMAT_LIST_CREATE_INFO);
     if (formatListInfo && formatListInfo->pViewFormats) {
-        formatListInfo->viewFormatCount = 1;
         VkFormat* viewFormats = (VkFormat*)formatListInfo->pViewFormats;
-        viewFormats[0] = DECOMPRESSED_FORMAT;
+        formatListInfo->viewFormatCount = BCDecoder_mapViewFormats(viewFormats,
+                formatListInfo->viewFormatCount, imageInfo->format);
     }
 
     VkImage image;
@@ -456,7 +471,7 @@ void TextureDecoder_removeBoundBuffer(TextureDecoder* textureDecoder, VkBuffer b
 }
 
 bool TextureDecoder_isFormatSupported(TextureDecoder* textureDecoder, VkFormat format) {
-    if (!isCompressedFormat(format)) return false;
+    if (!isCanDecompressFormat(format)) return false;
     if (textureDecoder->deviceSupportedFormats > 0) {
         bool result = textureDecoder->deviceSupportedFormats & VK_FORMAT_BC_FLAG(format);
         if (result) return false;

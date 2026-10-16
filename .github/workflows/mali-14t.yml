@@ -59,6 +59,8 @@ jobs:
         run: python3 tests/mali-14t/native/run.py app/src/main/cpp/vortekrenderer
       - name: Check Mali memory and texture cache regressions
         run: python3 tests/mali-memory/run.py app/src/main/cpp/vortekrenderer
+      - name: Check Vortek BC formats and texture decoding
+        run: python3 tests/vortek-bc/run.py app/src/main/cpp/vortekrenderer
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
         with:
@@ -76,7 +78,7 @@ jobs:
           cp app/build/outputs/apk/debug/app-debug.apk artifacts/Winlator-11.2-Mali-14T-experimental.apk
           cd artifacts
           sha256sum Winlator-11.2-Mali-14T-experimental.apk > SHA256SUMS.txt
-          printf '%s\n' "Source commit: $GITHUB_SHA" "Experimental memory/cache update; runtime validation on Xiaomi 14T pending." > BUILD.txt
+          printf '%s\n' "Source commit: $GITHUB_SHA" "Experimental Vortek BC texture update; runtime validation on Xiaomi 14T pending." > BUILD.txt
       - name: Record APK signing certificate
         run: |
           "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify --verbose --print-certs artifacts/Winlator-11.2-Mali-14T-experimental.apk > artifacts/SIGNING-CERTIFICATE.txt

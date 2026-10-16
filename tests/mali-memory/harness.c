@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <sys/mman.h>
 #include "vulkan/vulkan_core.h"
+#include "bc_layout.h"
 #define CACHE_MIN_IMAGE_WIDTH 1024
 #define MEMFREE(p) free(p)
 typedef struct { VkMemoryType* memoryTypes; int memoryTypeCount; } DeviceMemoryInfo;
@@ -28,6 +29,8 @@ typedef struct { TextureDecoder_BufferImageCopy* next; } ArrayDeque;
 typedef struct { ArrayDeque bufferImageCopies; void* decompressedData; uint32_t bufferSize; int imageCacheSize; void* threadPool; VkDevice device; VkQueue queue; VkCommandBuffer commandBuffer; VkBuffer buffer; VkFence fence; } TextureDecoder;
 static int creates,hashes,reads,decodes,writes,submits,unmaps;
 static bool cacheHit,failCreate;
+static bool checkLayout;
+static size_t expectedSource,expectedPitch,expectedSlice;
 static char input[1024*1024];
 static bool ArrayDeque_isEmpty(ArrayDeque* q){return !q->next;}
 static void* ArrayDeque_removeFirst(ArrayDeque* q){void* p=q->next;q->next=NULL;return p;}
@@ -40,9 +43,16 @@ static bool createDecodeBuffer(TextureDecoder* t,uint32_t n){creates++;free(t->d
 static uint64_t murmurHash64(void* p,int n,VkFormat f){hashes++;return 42;}
 static bool readCachedImage(TextureDecoder_Image* i,uint64_t h,void* p){reads++;assert(p);if(cacheHit)memset(p,0x5a,(size_t)i->width*i->height*4);return cacheHit;}
 static void writeImageToCache(TextureDecoder* t,TextureDecoder_Image* i,uint64_t h){writes++;}
-static void BCDecoder_decode(void* in,void* out,int w,int h,int bc,bool alpha,void* pool){assert(out);decodes++;}
+static void BCDecoder_decodePitched(const uint8_t* in,void* out,int w,int h,int bc,bool alpha,size_t pitch,void* pool){
+ assert(out);
+ if(checkLayout){assert(in==((uint8_t*)input)+expectedSource+decodes*expectedSlice);assert(pitch==expectedPitch);}
+ decodes++;
+}
 static VkResult begin(VkCommandBuffer c,const VkCommandBufferBeginInfo* i){return VK_SUCCESS;}
-static void copy(VkCommandBuffer c,VkBuffer b,VkImage i,VkImageLayout l,uint32_t n,const VkBufferImageCopy* r){}
+static void copy(VkCommandBuffer c,VkBuffer b,VkImage i,VkImageLayout l,uint32_t n,const VkBufferImageCopy* r){
+ assert(r->bufferOffset==0&&r->bufferRowLength==0&&r->bufferImageHeight==0);
+ if(checkLayout){assert(r->imageSubresource.layerCount==6);assert(r->imageSubresource.baseArrayLayer==2);assert(r->imageOffset.x==4);}
+}
 static VkResult end(VkCommandBuffer c){return VK_SUCCESS;}
 static VkResult submit(VkQueue q,uint32_t n,const VkSubmitInfo* i,VkFence f){submits++;return VK_SUCCESS;}
 static VkResult wait(VkDevice d,uint32_t n,const VkFence* f,VkBool32 all,uint64_t timeout){return VK_SUCCESS;}
@@ -74,6 +84,19 @@ static void textureCase(bool hit,int cache,bool fail,bool smallBuffer,bool parti
  }
  free(t.decompressedData);
 }
+static void paddedLayers(bool truncated,bool overflowOffset){
+ creates=hashes=reads=decodes=writes=submits=unmaps=0;failCreate=false;checkLayout=true;
+ expectedSource=40;expectedPitch=24;expectedSlice=72;
+ ResourceMemory mem={truncated?439:440,1};Bound bound={&mem,16};
+ TextureDecoder_Image image={64,64,VK_FORMAT_BC1_RGB_UNORM_BLOCK,VK_NULL_HANDLE};TextureDecoder t={0};
+ TextureDecoder_BufferImageCopy* c=calloc(1,sizeof(*c));c->srcBuffer=&bound;c->dstImage=&image;
+ c->region.imageExtent=(VkExtent3D){5,7,1};c->region.imageSubresource.layerCount=6;c->region.imageSubresource.baseArrayLayer=2;
+ c->region.imageOffset.x=4;c->region.bufferRowLength=12;c->region.bufferImageHeight=12;c->region.bufferOffset=overflowOffset?UINT64_MAX:24;
+ t.bufferImageCopies.next=c;TextureDecoder_decodeAll(&t);
+ if(truncated||overflowOffset)assert(!creates&&!decodes&&!submits&&!unmaps);
+ else assert(creates==1&&decodes==6&&submits==1&&unmaps==1&&t.bufferSize==840);
+ assert(!hashes&&!reads&&!writes);free(t.decompressedData);checkLayout=false;
+}
 int main(void){
  types[0].propertyFlags=VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
  types[1].propertyFlags=VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
@@ -96,5 +119,6 @@ int main(void){
  textureCase(true,0,false,false,false); // disabled cache performs no hash or read
  textureCase(true,512,true,true,false); // allocation failure must not decode or submit
  textureCase(true,512,false,false,true); // mip must not read a full-size cache entry
- puts("PASS: 9 memory/capability assertions and 6 texture upload scenarios");
+ paddedLayers(false,false);paddedLayers(true,false);paddedLayers(false,true);
+ puts("PASS: 9 memory/capability assertions and 9 texture upload scenarios");
 }
