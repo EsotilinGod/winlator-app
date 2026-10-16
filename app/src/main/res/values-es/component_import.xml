@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="component_import_failed">No se pudo importar el componente. Comprueba que el archivo esté completo y sea compatible. Los detalles se guardan en el registro de Android (WinlatorImport).</string>
+</resources>

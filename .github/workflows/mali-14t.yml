@@ -47,6 +47,8 @@ jobs:
           rm -f "$RUNNER_TEMP/signing-check.csr"
       - name: Run Java regression checks
         run: python3 tests/mali-14t/java/run.py app/src/main/java/com/winlator
+      - name: Check document provider imports
+        run: python3 tests/document-import/run.py
       - name: Check per-game DLL override merging
         run: |
           javac -d /tmp/dinput8-test app/src/main/java/com/winlator/core/DllOverrides.java tests/dinput8/DllOverridesTest.java

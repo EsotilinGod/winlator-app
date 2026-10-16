@@ -4,6 +4,7 @@ import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
 import android.os.Build;
+import android.util.Log;
 import android.view.View;
 import android.widget.ArrayAdapter;
 import android.widget.PopupMenu;
@@ -19,6 +20,7 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Locale;
@@ -291,18 +293,16 @@ public abstract class GeneralComponents {
     }
 
     private static void openFileForInstall(final MainActivity activity, final Type type, final Spinner spinner, final String defaultItem) {
-        activity.setOpenFileCallback((uri) -> {
-            String path = FileUtils.getFilePathFromUri(uri);
-            if (path == null) return;
-
+        activity.setOpenFileCallback((uri) -> new Thread(() -> {
+            File source = null;
             try {
-                File source = new File(path);
+                source = DocumentImport.copyToCache(activity, uri);
                 switch (type) {
                     case SOUNDFONT: {
-                        String filename = FileUtils.getName(path);
+                        String filename = DocumentImport.displayName(activity, uri);
                         File destination = new File(getComponentDir(type, activity), filename);
                         if (destination.isFile()) FileUtils.delete(destination);
-                        if (FileUtils.copy(source, destination)) loadSpinner(type, spinner, parseDisplayText(type, filename), defaultItem);
+                        if (FileUtils.copy(source, destination)) loadImportedSpinner(activity, type, spinner, parseDisplayText(type, filename), defaultItem);
                         break;
                     }
                     case ADRENOTOOLS_DRIVER: {
@@ -311,15 +311,20 @@ public abstract class GeneralComponents {
                             JSONObject manifestJSONObject = new JSONObject(new String(manifestData));
                             String filename = manifestJSONObject.optString("name", manifestJSONObject.optString("libraryName", ""));
                             filename = filename.replaceAll("[^a-zA-Z0-9._ -]", "_");
-                            if (filename.isEmpty()) break;
+                            if (filename.isEmpty() || filename.equals(".") || filename.equals("..") ||
+                                    isBuiltinComponent(type, filename)) throw new IOException("Invalid driver name");
                             File destination = new File(getComponentDir(type, activity), filename);
                             if (destination.isDirectory()) FileUtils.delete(destination);
                             destination.mkdirs();
                             if (ZipUtils.extract(source, destination) &&
                                     getDefinitivePath(type, activity, filename) != null)
-                                loadSpinner(type, spinner, filename, defaultItem);
-                            else FileUtils.delete(destination);
+                                loadImportedSpinner(activity, type, spinner, filename, defaultItem);
+                            else {
+                                FileUtils.delete(destination);
+                                throw new IOException("Driver extraction or library validation failed");
+                            }
                         }
+                        else throw new IOException("ZIP has no driver manifest with libraryName");
                         break;
                     }
                     default: {
@@ -334,20 +339,33 @@ public abstract class GeneralComponents {
 
                             if (contentType.equals(type.name()) && !identifier.isEmpty() && filesJSONArray != null) {
                                 installFromPackagedFile(activity, compressedType, type, source, identifier, filesJSONArray);
-                                loadSpinner(type, spinner, identifier, defaultItem);
+                                loadImportedSpinner(activity, type, spinner, identifier, defaultItem);
                             }
                         }
                         break;
                     }
                 }
             }
-            catch (JSONException e) {}
-        });
+            catch (Exception e) {
+                Log.e("WinlatorImport", "Component import failed: " + type, e);
+                AppUtils.showToast(activity, R.string.component_import_failed);
+            }
+            finally {
+                if (source != null) source.delete();
+            }
+        }, "ComponentImport").start());
 
         Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
         intent.addCategory(Intent.CATEGORY_OPENABLE);
         intent.setType("*/*");
         activity.startActivityForResult(intent, MainActivity.OPEN_FILE_REQUEST_CODE);
+    }
+
+    private static void loadImportedSpinner(Activity activity, Type type, Spinner spinner, String selected, String fallback) {
+        activity.runOnUiThread(() -> {
+            if (!activity.isFinishing() && !activity.isDestroyed())
+                loadSpinner(type, spinner, selected, fallback);
+        });
     }
 
     private static void showDownloadableListDialog(Type type, final Spinner spinner, final String defaultItem) {
