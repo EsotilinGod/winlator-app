@@ -8,8 +8,8 @@ android {
         applicationId 'com.winlator'
         minSdkVersion 26
         targetSdkVersion 28
-        versionCode 35
-        versionName "11.2-Mali-14T-hud1"
+        versionCode 36
+        versionName "11.2-Mali-14T-quickhud1"
     }
 
     buildTypes {

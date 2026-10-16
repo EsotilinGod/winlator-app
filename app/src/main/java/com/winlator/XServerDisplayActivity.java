@@ -134,6 +134,8 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
     private boolean capturePointerOnExternalMouse = true;
     private MagnifierView magnifierView;
     private DebugDialog debugDialog;
+    private MenuItem quickHudMenuItem;
+    private FrameRating.Mode quickHudMode = FrameRating.Mode.ADVANCED;
     public int frameRatingWindowId = -1;
     private Win32AppWorkarounds win32AppWorkarounds;
     private String screenEffectProfile;
@@ -162,6 +164,8 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
         if (enableLogs) ProcessHelper.addDebugCallback(debugDialog = new DebugDialog(this));
         Menu menu = navigationView.getMenu();
         menu.findItem(R.id.menu_item_logs).setVisible(enableLogs);
+        quickHudMenuItem = menu.findItem(R.id.menu_item_quick_hud);
+        quickHudMenuItem.setVisible(false);
         navigationView.setNavigationItemSelectedListener(this);
 
         rootFS = RootFS.find(this);
@@ -374,6 +378,10 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
                 renderer.toggleFullscreen();
                 drawerLayout.closeDrawers();
                 break;
+            case R.id.menu_item_quick_hud:
+                togglePerformanceHud();
+                drawerLayout.closeDrawers();
+                break;
             case R.id.menu_item_task_manager:
                 (new TaskManagerDialog(this)).show();
                 drawerLayout.closeDrawers();
@@ -509,7 +517,9 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
         GuestProgramLauncherComponent guestProgramLauncherComponent = new GuestProgramLauncherComponent();
 
         if (container != null) {
-            if ((container.getHUDMode() == FrameRating.Mode.FULL.ordinal() || container.getHUDMode() == FrameRating.Mode.ADVANCED.ordinal())) envVars.put("X11_WND_GPU_INFO", "1");
+            // The HUD can be enabled from the in-session menu, so request the
+            // once-per-window GPU description even when it starts disabled.
+            envVars.put("X11_WND_GPU_INFO", "1");
 
             String desktopName = shortcut != null || getIntent().hasExtra("exec_path") ? "nogui" : "shell";
             String guestExecutable = "wine explorer /desktop="+desktopName+","+xServer.screenInfo+" "+getWineStartCommand();
@@ -616,11 +626,20 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
         inputControlsView.setVisibility(View.GONE);
         rootView.addView(inputControlsView);
 
-        if (container != null && container.getHUDMode() != FrameRating.Mode.DISABLED.ordinal()) {
+        if (container != null) {
+            FrameRating.Mode[] modes = FrameRating.Mode.values();
+            int storedMode = container.getHUDMode();
+            FrameRating.Mode initialMode = storedMode >= 0 && storedMode < modes.length
+                    ? modes[storedMode] : FrameRating.Mode.DISABLED;
+            quickHudMode = initialMode == FrameRating.Mode.DISABLED
+                    ? FrameRating.Mode.ADVANCED : initialMode;
+
             frameRating = new FrameRating(this);
-            frameRating.setMode(FrameRating.Mode.values()[container.getHUDMode()]);
+            frameRating.setMode(initialMode);
             frameRating.setVisibility(View.GONE);
             rootView.addView(frameRating);
+            quickHudMenuItem.setVisible(true);
+            updateQuickHudMenuTitle();
         }
 
         if (shortcut != null) {
@@ -1097,6 +1116,37 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
         container.putExtra("dxwrapper", null);
         container.putExtra("desktopTheme", null);
         SettingsFragment.resetPreferenceVersions(this);
+    }
+
+    private void updateQuickHudMenuTitle() {
+        if (quickHudMenuItem == null || frameRating == null) return;
+        quickHudMenuItem.setTitle(frameRating.getMode() == FrameRating.Mode.DISABLED
+                ? R.string.show_performance_hud : R.string.hide_performance_hud);
+    }
+
+    private void togglePerformanceHud() {
+        if (frameRating == null) return;
+
+        if (frameRating.getMode() == FrameRating.Mode.DISABLED) {
+            frameRating.setMode(quickHudMode);
+            if (frameRatingWindowId != -1) {
+                Window window = xServer.windowManager.getWindow(frameRatingWindowId);
+                if (window != null) {
+                    if (frameRating.hasDeviceInfo()) {
+                        Property gpuInfo = window.getProperty(Atom._NET_WM_GPU_INFO);
+                        frameRating.setGPUInfo(gpuInfo != null ? new String(gpuInfo.data.array()) : "N/A");
+                    }
+                    frameRating.reset();
+                    frameRating.setVisibility(View.VISIBLE);
+                }
+            }
+        }
+        else {
+            quickHudMode = frameRating.getMode();
+            frameRating.setMode(FrameRating.Mode.DISABLED);
+            frameRating.setVisibility(View.GONE);
+        }
+        updateQuickHudMenuTitle();
     }
 
     public void changeFrameRatingVisibility(Window window, boolean visible) {
