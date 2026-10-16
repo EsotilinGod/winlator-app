@@ -12,6 +12,14 @@ public final class GraphicsCompatibility {
         return name.contains("mali") || name.contains("immortalis");
     }
 
+    public static boolean isPanVKPackage(String backend, String kernelInterface, String abi,
+                                         int minApi, int deviceApi) {
+        return "panvk-kbase".equalsIgnoreCase(backend) &&
+                "mali_kbase".equalsIgnoreCase(kernelInterface) &&
+                "android-aarch64-bionic".equalsIgnoreCase(abi) &&
+                minApi > 0 && deviceApi >= minApi;
+    }
+
     /** null preserves Vortek's default extension handling. */
     public static String[] parseExposedExtensions(String value) {
         // A pipe separates Vulkan and OpenGL configurations, not extensions.

@@ -185,21 +185,39 @@ public abstract class GeneralComponents {
         else if (type == Type.ADRENOTOOLS_DRIVER) {
             if (isBuiltinComponent(type, identifier)) return null;
             File source = type.getSource(context, identifier);
-            File[] manifestFiles = source.listFiles((file, name) -> name.endsWith(".json"));
-            if (manifestFiles != null) {
-                try {
-                    JSONObject manifestJSONObject = new JSONObject(FileUtils.readString(manifestFiles[0]));
-                    String libraryName = manifestJSONObject.optString("libraryName", "");
-                    File libraryFile = new File(source, libraryName);
-                    return libraryFile.isFile() ? libraryFile.getPath() : null;
-                }
-                catch (JSONException e) {
-                    return null;
-                }
+            JSONObject manifest = getAdrenotoolsDriverManifest(source);
+            if (manifest == null || Build.VERSION.SDK_INT < manifest.optInt("minApi", 0)) return null;
+            File libraryFile = new File(source, manifest.optString("libraryName", ""));
+            try {
+                String sourcePath = source.getCanonicalPath()+File.separator;
+                return libraryFile.isFile() && libraryFile.getCanonicalPath().startsWith(sourcePath)
+                        ? libraryFile.getPath() : null;
             }
+            catch (Exception ignored) { return null; }
         }
 
         return type.getSource(context, identifier).getPath();
+    }
+
+    private static JSONObject getAdrenotoolsDriverManifest(File source) {
+        File[] files = source.listFiles((file, name) -> name.endsWith(".json"));
+        if (files == null) return null;
+        for (File file : files) {
+            try {
+                JSONObject object = new JSONObject(FileUtils.readString(file));
+                if (!object.optString("libraryName", "").isEmpty()) return object;
+            }
+            catch (JSONException ignored) {}
+        }
+        return null;
+    }
+
+    public static boolean isPanVKDriver(Context context, String identifier) {
+        if (identifier == null || identifier.isEmpty() || isBuiltinComponent(Type.ADRENOTOOLS_DRIVER, identifier)) return false;
+        JSONObject manifest = getAdrenotoolsDriverManifest(Type.ADRENOTOOLS_DRIVER.getSource(context, identifier));
+        return manifest != null && GraphicsCompatibility.isPanVKPackage(
+                manifest.optString("backend", ""), manifest.optString("kernelInterface", ""),
+                manifest.optString("abi", ""), manifest.optInt("minApi", 0), Build.VERSION.SDK_INT);
     }
 
     public static void extractFile(Type type, Context context, String identifier, String defaultVersion) {
@@ -288,14 +306,19 @@ public abstract class GeneralComponents {
                         break;
                     }
                     case ADRENOTOOLS_DRIVER: {
-                        byte[] manifestData = ZipUtils.read(source, "*.json");
+                        byte[] manifestData = ZipUtils.readJsonWithField(source, "libraryName");
                         if (manifestData != null) {
                             JSONObject manifestJSONObject = new JSONObject(new String(manifestData));
                             String filename = manifestJSONObject.optString("name", manifestJSONObject.optString("libraryName", ""));
+                            filename = filename.replaceAll("[^a-zA-Z0-9._ -]", "_");
+                            if (filename.isEmpty()) break;
                             File destination = new File(getComponentDir(type, activity), filename);
                             if (destination.isDirectory()) FileUtils.delete(destination);
                             destination.mkdirs();
-                            if (ZipUtils.extract(source, destination)) loadSpinner(type, spinner, filename, defaultItem);
+                            if (ZipUtils.extract(source, destination) &&
+                                    getDefinitivePath(type, activity, filename) != null)
+                                loadSpinner(type, spinner, filename, defaultItem);
+                            else FileUtils.delete(destination);
                         }
                         break;
                     }

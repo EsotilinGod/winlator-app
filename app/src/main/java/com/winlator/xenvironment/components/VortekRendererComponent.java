@@ -64,10 +64,15 @@ public class VortekRendererComponent extends EnvironmentComponent implements Con
 
             String adrenotoolsDriver = config.get("adrenotoolsDriver");
             if (GraphicsCompatibility.isMaliRenderer(GPUHelper.glGetRenderer(context))) {
-                // Also enforce this for imported containers and shortcut overrides.
-                options.libvulkanPath = null;
-                if (!adrenotoolsDriver.isEmpty() && !adrenotoolsDriver.equalsIgnoreCase("System")) {
-                    Log.w("WinlatorGPU", "Mali GPU: ignoring custom Adrenotools driver; using system Vulkan");
+                if (GeneralComponents.isPanVKDriver(context, adrenotoolsDriver)) {
+                    options.libvulkanPath = GeneralComponents.getDefinitivePath(
+                            GeneralComponents.Type.ADRENOTOOLS_DRIVER, context, adrenotoolsDriver);
+                    Log.i("WinlatorGPU", "Mali GPU: loading validated PanVK Kbase package");
+                }
+                else {
+                    options.libvulkanPath = null;
+                    if (!adrenotoolsDriver.isEmpty() && !adrenotoolsDriver.equalsIgnoreCase("System"))
+                        Log.w("WinlatorGPU", "Mali GPU: incompatible custom driver; falling back to system Vulkan");
                 }
             }
             else {

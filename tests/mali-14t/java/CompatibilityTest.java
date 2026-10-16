@@ -17,6 +17,18 @@ public class CompatibilityTest {
         check(!GraphicsCompatibility.isMaliRenderer("ANGLE (Qualcomm Adreno 750)"), "ANGLE Adreno unchanged");
         check(!GraphicsCompatibility.isMaliRenderer(""), "Unknown is not Mali");
         check(!GraphicsCompatibility.isMaliRenderer(null), "Null is not Mali");
+        check(GraphicsCompatibility.isPanVKPackage("panvk-kbase", "mali_kbase",
+                "android-aarch64-bionic", 35, 36), "PanVK RC3 on Android 16");
+        check(GraphicsCompatibility.isPanVKPackage("PANVK-KBASE", "MALI_KBASE",
+                "ANDROID-AARCH64-BIONIC", 35, 35), "Manifest values are case insensitive");
+        check(!GraphicsCompatibility.isPanVKPackage("turnip", "mali_kbase",
+                "android-aarch64-bionic", 35, 36), "Turnip is rejected on Mali path");
+        check(!GraphicsCompatibility.isPanVKPackage("panvk-kbase", "mali_kbase",
+                "android-aarch64-bionic", 35, 34), "Minimum Android API is enforced");
+        check(!GraphicsCompatibility.isPanVKPackage("panvk-kbase", "mali_kbase",
+                "linux-aarch64-glibc", 35, 36), "glibc driver is rejected in Android process");
+        check(!GraphicsCompatibility.isPanVKPackage("panvk-kbase", "", "android-aarch64-bionic", 35, 36),
+                "Kernel interface is required");
 
         String first = "VK_KHR_swapchain";
         String second = "VK_EXT_memory_budget";

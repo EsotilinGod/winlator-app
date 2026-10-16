@@ -4,6 +4,7 @@ import android.content.Context;
 
 import org.apache.commons.compress.archivers.zip.ZipArchiveEntry;
 import org.apache.commons.compress.archivers.zip.ZipFile;
+import org.json.JSONObject;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
@@ -72,15 +73,22 @@ public abstract class ZipUtils {
     public static boolean extract(File source, File destination) {
         try {
             ZipFile zipFile = new ZipFile(source);
+            String destinationPath = destination.getCanonicalPath()+File.separator;
             Enumeration<ZipArchiveEntry> entries = zipFile.getEntries();
             while (entries.hasMoreElements()) {
                 ZipArchiveEntry entry = entries.nextElement();
                 File file = new File(destination, entry.getName());
+                if (!file.getCanonicalPath().startsWith(destinationPath)) {
+                    zipFile.close();
+                    return false;
+                }
 
                 if (entry.isDirectory()) {
                     if (!file.isDirectory()) file.mkdirs();
                 }
                 else {
+                    File parent = file.getParentFile();
+                    if (parent != null && !parent.isDirectory()) parent.mkdirs();
                     if (entry.isUnixSymlink()) {
                         FileUtils.symlink(zipFile.getUnixSymlink(entry), file.getAbsolutePath());
                     }
@@ -165,5 +173,27 @@ public abstract class ZipUtils {
         catch (Exception e) {
             return null;
         }
+    }
+
+    /** Returns the first small JSON manifest that contains a non-empty field. */
+    public static byte[] readJsonWithField(File source, String field) {
+        try (ZipFile zipFile = new ZipFile(source)) {
+            Enumeration<ZipArchiveEntry> entries = zipFile.getEntries();
+            while (entries.hasMoreElements()) {
+                ZipArchiveEntry entry = entries.nextElement();
+                if (entry.isDirectory() || entry.isUnixSymlink() ||
+                        !entry.getName().endsWith(".json") || entry.getSize() > 1024 * 1024) continue;
+                try (InputStream stream = zipFile.getInputStream(entry);
+                     ByteArrayOutputStream output = new ByteArrayOutputStream()) {
+                    if (!StreamUtils.copy(stream, output)) continue;
+                    byte[] data = output.toByteArray();
+                    JSONObject object = new JSONObject(new String(data));
+                    if (!object.optString(field, "").isEmpty()) return data;
+                }
+                catch (Exception ignored) {}
+            }
+        }
+        catch (Exception ignored) {}
+        return null;
     }
 }

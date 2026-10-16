@@ -18,10 +18,14 @@ static void* openVulkanLibrary(JNIEnv* env, jstring nativeLibraryDir, jstring li
     if (libvulkanPath) {
         const char* nativeLibraryDirC = (*env)->GetStringUTFChars(env, nativeLibraryDir, NULL);
         const char* libvulkanPathC = (*env)->GetStringUTFChars(env, libvulkanPath, NULL);
-        const char* libvulkanName = basename(libvulkanPathC);
+        char libraryPath[PATH_MAX] = {0};
+        char directoryPath[PATH_MAX] = {0};
+        snprintf(libraryPath, sizeof(libraryPath), "%s", libvulkanPathC);
+        snprintf(directoryPath, sizeof(directoryPath), "%s", libvulkanPathC);
+        const char* libvulkanName = basename(libraryPath);
 
         char libvulkanDir[PATH_MAX] = {0};
-        strcpy(libvulkanDir, dirname(libvulkanPathC));
+        snprintf(libvulkanDir, sizeof(libvulkanDir), "%s/", dirname(directoryPath));
         strcat(libvulkanDir, "/");
 
         char* tmpDir;
@@ -29,6 +33,13 @@ static void* openVulkanLibrary(JNIEnv* env, jstring nativeLibraryDir, jstring li
         mkdir(tmpDir, S_IRWXU | S_IRWXG);
 
         libvulkan = adrenotools_open_libvulkan(RTLD_NOW | RTLD_LOCAL, ADRENOTOOLS_DRIVER_CUSTOM, tmpDir, nativeLibraryDirC, libvulkanDir, libvulkanName, NULL, NULL);
+        free(tmpDir);
+
+        if (!libvulkan || !dlsym(libvulkan, "vkGetInstanceProcAddr")) {
+            if (libvulkan) dlclose(libvulkan);
+            println("vortek: custom Vulkan driver failed validation; using system driver");
+            libvulkan = dlopen(LIBVULKAN_PATH, RTLD_NOW | RTLD_LOCAL);
+        }
 
         (*env)->ReleaseStringUTFChars(env, nativeLibraryDir, nativeLibraryDirC);
         (*env)->ReleaseStringUTFChars(env, libvulkanPath, libvulkanPathC);
