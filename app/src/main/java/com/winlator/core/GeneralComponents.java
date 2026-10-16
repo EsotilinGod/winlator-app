@@ -346,7 +346,7 @@ public abstract class GeneralComponents {
                     }
                 }
             }
-            catch (Exception e) {
+            catch (Exception | LinkageError e) {
                 Log.e("WinlatorImport", "Component import failed: " + type, e);
                 AppUtils.showToast(activity, R.string.component_import_failed);
             }

@@ -74,6 +74,8 @@ jobs:
         run: |
           set -o pipefail
           bash ./gradlew --no-daemon --console=plain :app:assembleDebug 2>&1 | tee build-mali-14t.log
+      - name: Verify reflective ZIP classes in optimized APK
+        run: python3 tests/zip-reflection/check_apk.py app/build/outputs/apk/debug/app-debug.apk "$ANDROID_HOME/build-tools/34.0.0/dexdump"
       - name: Prepare downloadable APK
         run: |
           mkdir -p artifacts

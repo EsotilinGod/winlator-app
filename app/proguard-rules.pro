@@ -17,3 +17,9 @@
 #}
 
 -dontobfuscate
+
+# Commons Compress 1.20 registers these implementations via Class.newInstance().
+# Keeping names alone does not preserve constructors or prevent abstractification.
+-keep class * implements org.apache.commons.compress.archivers.zip.ZipExtraField {
+    *;
+}
