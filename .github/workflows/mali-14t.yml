@@ -38,12 +38,14 @@ jobs:
           python3 - <<'PY'
           import base64, os
           from pathlib import Path
-          key_path = Path.home() / ".android" / "debug.keystore"
+          key_path = Path(os.environ["RUNNER_TEMP"]) / "winlator-signing" / "permanent.keystore"
           key_path.parent.mkdir(parents=True, exist_ok=True)
           key_path.write_bytes(base64.b64decode(os.environ["WINLATOR_DEBUG_KEYSTORE_BASE64"].strip(), validate=True))
           key_path.chmod(0o600)
+          with open(os.environ["GITHUB_ENV"], "a") as env_file:
+              env_file.write("WINLATOR_KEYSTORE_PATH=" + str(key_path) + "\n")
           PY
-          keytool -certreq -alias androiddebugkey -keystore "$HOME/.android/debug.keystore" -storepass android -keypass android -file "$RUNNER_TEMP/signing-check.csr"
+          keytool -certreq -alias androiddebugkey -keystore "$RUNNER_TEMP/winlator-signing/permanent.keystore" -storepass android -keypass android -file "$RUNNER_TEMP/signing-check.csr"
           rm -f "$RUNNER_TEMP/signing-check.csr"
       - name: Run Java regression checks
         run: python3 tests/mali-14t/java/run.py app/src/main/java/com/winlator
@@ -83,6 +85,8 @@ jobs:
           cd artifacts
           sha256sum Winlator-11.2-Mali-14T-experimental.apk > SHA256SUMS.txt
           printf '%s\n' "Source commit: $GITHUB_SHA" "Experimental PanVK Kbase loader through Vortek; import the official Android RC3 adpkg. Runtime validation on Xiaomi 14T pending." > BUILD.txt
+      - name: Verify APK uses the permanent certificate
+        run: python3 tests/apk-updates/verify_signing.py artifacts/Winlator-11.2-Mali-14T-experimental.apk "$ANDROID_HOME/build-tools/34.0.0/apksigner"
       - name: Record APK signing certificate
         run: |
           "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify --verbose --print-certs artifacts/Winlator-11.2-Mali-14T-experimental.apk > artifacts/SIGNING-CERTIFICATE.txt
