@@ -43,6 +43,7 @@ public class PresentExtension extends Extension implements WindowManager.OnWindo
     private SyncExtension syncExtension;
     private long eglContextPtr;
     private ScheduledExecutorService idleNotifyScheduler;
+    private boolean closed;
 
     private static abstract class ClientOpcodes {
         private static final byte QUERY_VERSION = 0;
@@ -61,6 +62,19 @@ public class PresentExtension extends Extension implements WindowManager.OnWindo
         super(xServer, majorOpcode);
         xServer.windowManager.addOnWindowModificationListener(this);
         xServer.windowManager.addOnResourceLifecycleListener(this);
+    }
+
+    /** Release the session's scheduled frame notifications when its X server closes. */
+    public synchronized void shutdown() {
+        closed = true;
+        ScheduledExecutorService scheduler = idleNotifyScheduler;
+        idleNotifyScheduler = null;
+        if (scheduler != null) scheduler.shutdownNow();
+        xServer.windowManager.removeOnWindowModificationListener(this);
+        xServer.windowManager.removeOnResourceLifecycleListener(this);
+        synchronized (events) {
+            events.clear();
+        }
     }
 
     @Override
@@ -102,7 +116,8 @@ public class PresentExtension extends Extension implements WindowManager.OnWindo
         }
     }
 
-    private void sendIdleNotifyScheduled(final Window window, final Pixmap pixmap, final int serial, final int idleFence) {
+    private synchronized void sendIdleNotifyScheduled(final Window window, final Pixmap pixmap, final int serial, final int idleFence) {
+        if (closed) return;
         final long frameTime = 1000000000L / 60;
         long now = System.nanoTime();
 
