@@ -13,7 +13,6 @@ import com.winlator.xserver.errors.BadMatch;
 import com.winlator.xserver.errors.XRequestError;
 
 import java.io.IOException;
-import java.util.concurrent.TimeUnit;
 
 public class SyncExtension extends Extension {
     private final SparseBooleanArray fences = new SparseBooleanArray();
@@ -42,7 +41,10 @@ public class SyncExtension extends Extension {
 
     public void setTriggered(int id) {
         synchronized (fences) {
-            if (fences.indexOfKey(id) >= 0) fences.put(id, true);
+            if (fences.indexOfKey(id) >= 0) {
+                fences.put(id, true);
+                fences.notifyAll();
+            }
         }
     }
 
@@ -75,6 +77,7 @@ public class SyncExtension extends Extension {
             int id = inputStream.readInt();
             if (fences.indexOfKey(id) < 0) throw new BadFence(id);
             fences.put(id, true);
+            fences.notifyAll();
         }
     }
 
@@ -95,6 +98,7 @@ public class SyncExtension extends Extension {
             int id = inputStream.readInt();
             if (fences.indexOfKey(id) < 0) throw new BadFence(id);
             fences.delete(id);
+            fences.notifyAll();
         }
     }
 
@@ -108,16 +112,15 @@ public class SyncExtension extends Extension {
             length -= 4;
         }
 
-        int busyWaitIter = 0;
-        while (!isAnyTriggered(ids)) {
-            try {
-                if (busyWaitIter++ < 500) {
-                    Thread.yield();
+        synchronized (fences) {
+            while (!isAnyTriggered(ids)) {
+                try {
+                    fences.wait();
                 }
-                else TimeUnit.MICROSECONDS.sleep(100);
-            }
-            catch (InterruptedException e) {
-                break;
+                catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
             }
         }
     }
