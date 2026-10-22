@@ -64,16 +64,11 @@ public class VortekRendererComponent extends EnvironmentComponent implements Con
 
             String adrenotoolsDriver = config.get("adrenotoolsDriver");
             if (GraphicsCompatibility.isMaliRenderer(GPUHelper.glGetRenderer(context))) {
-                if (GeneralComponents.isPanVKDriver(context, adrenotoolsDriver)) {
-                    options.libvulkanPath = GeneralComponents.getDefinitivePath(
-                            GeneralComponents.Type.ADRENOTOOLS_DRIVER, context, adrenotoolsDriver);
-                    Log.i("WinlatorGPU", "Mali GPU: loading validated PanVK Kbase package");
-                }
-                else {
-                    options.libvulkanPath = null;
-                    if (!adrenotoolsDriver.isEmpty() && !adrenotoolsDriver.equalsIgnoreCase("System"))
-                        Log.w("WinlatorGPU", "Mali GPU: incompatible custom driver; falling back to system Vulkan");
-                }
+                // A reported Xiaomi 14T reboot occurred after loading PanVK Kbase.
+                // Enforce this for saved containers and shortcut overrides, not only the UI.
+                options.libvulkanPath = null;
+                if (!adrenotoolsDriver.isEmpty() && !adrenotoolsDriver.equalsIgnoreCase("System"))
+                    Log.w("WinlatorGPU", "Mali GPU: custom Vulkan driver disabled after reported device reboot; using system Vulkan");
             }
             else {
                 options.libvulkanPath = GeneralComponents.getDefinitivePath(GeneralComponents.Type.ADRENOTOOLS_DRIVER, context, adrenotoolsDriver);

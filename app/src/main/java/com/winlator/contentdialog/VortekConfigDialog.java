@@ -41,7 +41,13 @@ public class VortekConfigDialog extends ContentDialog {
         mscbExposedExtensions.setSelectedItems(selectedExtensions != null ? selectedExtensions : deviceExtensions);
 
         String adrenotoolsDriver = config.get("adrenotoolsDriver");
+        final boolean mali = GraphicsCompatibility.isMaliRenderer(GPUHelper.glGetRenderer(context));
+        if (mali) adrenotoolsDriver = "System";
         GeneralComponents.initViews(GeneralComponents.Type.ADRENOTOOLS_DRIVER, findViewById(R.id.AdrenotoolsDriverToolbox), sAdrenotoolsDriver, adrenotoolsDriver, "System");
+        if (mali) {
+            sAdrenotoolsDriver.setEnabled(false);
+            findViewById(R.id.AdrenotoolsDriverToolbox).setVisibility(View.GONE);
+        }
 
         AppUtils.setSpinnerSelectionFromValue(sVkMaxVersion, config.get("vkMaxVersion", DEFAULT_VK_MAX_VERSION));
         AppUtils.setSpinnerSelectionFromMemorySize(sMaxDeviceMemory, config.get("maxDeviceMemory", "0"));
@@ -50,7 +56,7 @@ public class VortekConfigDialog extends ContentDialog {
 
         setOnConfirmCallback(() -> {
             KeyValueSet newConfig = new KeyValueSet();
-            newConfig.put("adrenotoolsDriver", sAdrenotoolsDriver.getSelectedItem());
+            newConfig.put("adrenotoolsDriver", mali ? "System" : sAdrenotoolsDriver.getSelectedItem());
             newConfig.put("vkMaxVersion", StringUtils.parseNumber(sVkMaxVersion.getSelectedItem(), "0"));
             newConfig.put("maxDeviceMemory", StringUtils.parseMemorySize(sMaxDeviceMemory.getSelectedItem()));
             newConfig.put("imageCacheSize", StringUtils.parseNumber(sImageCacheSize.getSelectedItem()));
