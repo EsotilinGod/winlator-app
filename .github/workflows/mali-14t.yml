@@ -61,6 +61,8 @@ jobs:
           java -cp /tmp/hud-tests FrameTimingTest
       - name: Run native regression checks
         run: python3 tests/mali-14t/native/run.py app/src/main/cpp/vortekrenderer
+      - name: Check Vortek request waiting and cancellation
+        run: python3 tests/vortek-wait/run.py
       - name: Check Mali memory and texture cache regressions
         run: python3 tests/mali-memory/run.py app/src/main/cpp/vortekrenderer
       - name: Check Vortek BC formats and texture decoding
@@ -84,7 +86,7 @@ jobs:
           cp app/build/outputs/apk/debug/app-debug.apk artifacts/Winlator-11.2-Mali-14T-experimental.apk
           cd artifacts
           sha256sum Winlator-11.2-Mali-14T-experimental.apk > SHA256SUMS.txt
-          printf '%s\n' "Source commit: $GITHUB_SHA" "Mali safe mode: custom Vulkan drivers disabled after a reported Xiaomi 14T device reboot. Existing containers use system Vulkan." > BUILD.txt
+          printf '%s\n' "Source commit: $GITHUB_SHA" "Vortek request waits use a condition variable to reduce polling. Mali continues to use system Vulkan; PanVK remains disabled after the reported reboot." > BUILD.txt
       - name: Verify APK uses the permanent certificate
         run: python3 tests/apk-updates/verify_signing.py artifacts/Winlator-11.2-Mali-14T-experimental.apk "$ANDROID_HOME/build-tools/34.0.0/apksigner"
       - name: Record APK signing certificate

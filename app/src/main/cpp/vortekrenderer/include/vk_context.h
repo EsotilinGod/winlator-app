@@ -41,6 +41,7 @@ typedef struct VkContext {
 
     ArrayList extraDataRequests;
     pthread_mutex_t extraDataRequestsMutex;
+    pthread_cond_t extraDataRequestsCond;
 
     JMethods jmethods;
     char* engineName;

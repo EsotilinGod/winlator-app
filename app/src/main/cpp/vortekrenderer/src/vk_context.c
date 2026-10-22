@@ -19,11 +19,8 @@ static void loadJMethods(JMethods* jmethods) {
 
 static ExtraDataRequest* waitForExtraDataRequest(VkContext* context, uint16_t requestId) {
     ExtraDataRequest* result = NULL;
-    uint32_t busyWaitIter = 0;
-
+    pthread_mutex_lock(&context->extraDataRequestsMutex);
     while (context->status >= 0) {
-        result = NULL;
-        pthread_mutex_lock(&context->extraDataRequestsMutex);
         for (int i = 0; i < context->extraDataRequests.size; i++) {
             ExtraDataRequest* extraDataRequest = context->extraDataRequests.elements[i];
             if (extraDataRequest->requestId == requestId) {
@@ -32,13 +29,11 @@ static ExtraDataRequest* waitForExtraDataRequest(VkContext* context, uint16_t re
                 break;
             }
         }
-        pthread_mutex_unlock(&context->extraDataRequestsMutex);
-
         if (result) break;
-        busyWait(&busyWaitIter);
+        pthread_cond_wait(&context->extraDataRequestsCond, &context->extraDataRequestsMutex);
     }
-
-    return context->status >= 0 ? result : NULL;
+    pthread_mutex_unlock(&context->extraDataRequestsMutex);
+    return result;
 }
 
 static void* requestHandlerThread(void* param) {
@@ -115,6 +110,7 @@ VkContext* createVkContext(JNIEnv* env, jobject obj, int clientFd, jobject optio
     context->exposedDeviceExtensions = jstringArrayToCharArray(env, exposedDeviceExtensions);
 
     pthread_mutex_init(&context->extraDataRequestsMutex, NULL);
+    pthread_cond_init(&context->extraDataRequestsCond, NULL);
 
     context->memoryPool.data = calloc(MEMORY_POOL_MAX_SIZE, 1);
     context->threadPool = ThreadPool_init(THREAD_POOL_NUM_THREADS);
@@ -131,7 +127,10 @@ VkContext* createVkContext(JNIEnv* env, jobject obj, int clientFd, jobject optio
 }
 
 void destroyVkContext(JNIEnv* env, VkContext* context) {
+    pthread_mutex_lock(&context->extraDataRequestsMutex);
     context->status = VK_ERROR_DEVICE_LOST;
+    pthread_cond_broadcast(&context->extraDataRequestsCond);
+    pthread_mutex_unlock(&context->extraDataRequestsMutex);
 
     if (context->requestHandlerThread) {
         RingBuffer_setStatus(context->serverRing, RING_STATUS_EXIT);
@@ -165,6 +164,7 @@ void destroyVkContext(JNIEnv* env, VkContext* context) {
     context->disabledDeviceExtensions = NULL;
 
     ArrayList_free(&context->extraDataRequests, true);
+    pthread_cond_destroy(&context->extraDataRequestsCond);
     pthread_mutex_destroy(&context->extraDataRequestsMutex);
 
     MEMFREE(context->memoryPool.data);
@@ -177,7 +177,10 @@ bool handleExtraDataRequest(VkContext* context, uint16_t requestId, int requestL
     if (requestLength > 0) {
         data = calloc(requestLength, 1);
         int bytesRead = sock_read(context->clientFd, data, requestLength);
-        if (bytesRead != requestLength) return false;
+        if (bytesRead != requestLength) {
+            free(data);
+            return false;
+        }
     }
 
     ExtraDataRequest* extraDataRequest = calloc(1, sizeof(ExtraDataRequest));
@@ -187,6 +190,7 @@ bool handleExtraDataRequest(VkContext* context, uint16_t requestId, int requestL
 
     pthread_mutex_lock(&context->extraDataRequestsMutex);
     ArrayList_add(&context->extraDataRequests, extraDataRequest);
+    pthread_cond_signal(&context->extraDataRequestsCond);
     pthread_mutex_unlock(&context->extraDataRequestsMutex);
     return true;
 }
