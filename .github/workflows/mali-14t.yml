@@ -88,7 +88,7 @@ jobs:
           cp app/build/outputs/apk/debug/app-debug.apk artifacts/Winlator-11.2-Mali-14T-experimental.apk
           cd artifacts
           sha256sum Winlator-11.2-Mali-14T-experimental.apk > SHA256SUMS.txt
-          printf '%s\n' "Source commit: $GITHUB_SHA" "Present scheduler is closed when a container session ends. X server and Vortek wait optimizations retained. Mali continues to use system Vulkan." > BUILD.txt
+          printf '%s\n' "Source commit: $GITHUB_SHA" "Vortek defaults to DXVK 1.10.3 on this Mali-focused branch. DXVK 2.x remains selectable manually; existing saved selections are preserved. Mali continues to use system Vulkan." > BUILD.txt
       - name: Verify APK uses the permanent certificate
         run: python3 tests/apk-updates/verify_signing.py artifacts/Winlator-11.2-Mali-14T-experimental.apk "$ANDROID_HOME/build-tools/34.0.0/apksigner"
       - name: Record APK signing certificate

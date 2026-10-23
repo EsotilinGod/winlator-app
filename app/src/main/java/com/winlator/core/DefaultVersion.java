@@ -25,9 +25,10 @@ public abstract class DefaultVersion {
     }
 
     public static String DXVK(String vulkanDriver) {
-        int vkApiVersion = 0;
-        if (vulkanDriver != null && vulkanDriver.equals(GraphicsDrivers.VORTEK)) vkApiVersion = GPUHelper.vkGetApiVersion();
-        return vulkanDriver == null || vulkanDriver.equals(GraphicsDrivers.TURNIP) || vkApiVersion >= GPUHelper.vkMakeVersion(1, 3, 0) ? MAJOR_DXVK : MINOR_DXVK;
+        // Vulkan 1.3 alone does not guarantee that the system Mali driver supports
+        // every feature required by DXVK 2.x. Keep the known-compatible version
+        // as Vortek's default; newer versions remain available for manual choice.
+        return GraphicsDrivers.VORTEK.equals(vulkanDriver) ? MINOR_DXVK : MAJOR_DXVK;
     }
 
     public static String valueOf(String name) {
