@@ -19,6 +19,9 @@ java -cp "$TMP/dinput8" DllOverridesTest
 javac -d "$TMP/hud" "$JAVA_SRC/core/FrameTiming.java" tests/hud/FrameTimingTest.java
 java -cp "$TMP/hud" FrameTimingTest
 
+javac -d "$TMP/report" "$JAVA_SRC/core/ReportFormatter.java" tests/device-report/ReportFormatterTest.java
+java -cp "$TMP/report" ReportFormatterTest
+
 python3 tests/mali-14t/native/run.py "$VORTEK"
 python3 tests/vortek-wait/run.py
 python3 tests/mali-memory/run.py "$VORTEK"

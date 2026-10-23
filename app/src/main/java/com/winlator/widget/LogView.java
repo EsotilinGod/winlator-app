@@ -17,6 +17,7 @@ import androidx.preference.PreferenceManager;
 import com.winlator.MainActivity;
 import com.winlator.R;
 import com.winlator.core.AppUtils;
+import com.winlator.core.DeviceReport;
 import com.winlator.core.FileUtils;
 import com.winlator.core.StreamUtils;
 import com.winlator.core.UnitUtils;
@@ -74,6 +75,7 @@ public class LogView extends View {
                 printStream = new PrintStream(new BufferedOutputStream(new FileOutputStream(logFile), StreamUtils.BUFFER_SIZE));
             }
             catch (IOException e) {}
+            if (printStream != null) printStream.append(DeviceReport.build(context)).append("\n");
             this.printStream = printStream;
         }
         else printStream = null;
@@ -236,6 +238,7 @@ public class LogView extends View {
         String logPath = logFile.getPath();
         if (logFile.isFile()) logFile.delete();
         try (BufferedWriter writer = new BufferedWriter(new FileWriter(logFile))) {
+            writer.write(DeviceReport.build(getContext())+"\n");
             synchronized (lock) {
                 for (String line : lines) writer.write(line+"\n");
             }
