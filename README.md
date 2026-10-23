@@ -8,6 +8,20 @@ Winlator is an Android application that lets you to run Windows (x86_64) applica
 This repository stores the latest updates for the Winlator app source.<br>
 For more information and releases, please visit the main repository: https://github.com/brunodev85/winlator
 
+# Fork note: Mali / Xiaomi 14T (`mali-14t` branch)
+
+This fork is an experimental adaptation of Winlator 11.2 for Mali/Immortalis GPUs (Vortek/Vulkan fixes, memory handling, HUD and sync improvements). It keeps the `com.winlator` application id, so it cannot be installed alongside the official app, and it is signed with a different key. Back up your containers before replacing an existing installation.
+
+Details are in [MALI-14T.md](MALI-14T.md) and the notes under [docs/](docs/). Nothing here has been validated on physical hardware yet.
+
+## Running the regression checks
+
+```
+tests/run_all.sh
+```
+
+This needs python3, a JDK and a C compiler. It runs the same host-side checks as the CI workflow (mock Vulkan driver, JVM logic); it does not run Android code or a real GPU.
+
 # Credits and Third-party apps
 
 - GLIBC Patches by [Termux Pacman](https://github.com/termux-pacman/glibc-packages)
