@@ -22,6 +22,7 @@ class RinWallpaperService : WallpaperService() {
     inner class RinEngine : Engine() {
         private val handler = Handler(Looper.getMainLooper())
         private var bitmap: Bitmap? = null
+        private var breeze: BreezeMesh? = null
         private var visible = false
         private var startTime = SystemClock.uptimeMillis()
         private val dest = RectF()
@@ -57,6 +58,7 @@ class RinWallpaperService : WallpaperService() {
 
         init {
             bitmap = assets.open("rin_wallpaper.jpg").use { BitmapFactory.decodeStream(it) }
+            breeze = bitmap?.let { BreezeMesh(it.width, it.height) }
             buildCircuitPaths()
         }
 
@@ -131,10 +133,21 @@ class RinWallpaperService : WallpaperService() {
             val dh = image.height * scale
             val left = (w - dw) / 2f
             val top = (h - dh) / 2f
-            dest.set(left, top, left + dw, top + dh)
-            canvas.drawBitmap(image, null, dest, paint)
-
             val elapsed = (SystemClock.uptimeMillis() - startTime) / 1000f
+
+            // Ilustración con brisa: misma imagen, deformada solo en pelo, lazo, pañuelo y correa.
+            val mesh = breeze
+            if (mesh != null) {
+                mesh.update(elapsed)
+                canvas.save()
+                canvas.translate(left, top)
+                canvas.scale(scale, scale)
+                canvas.drawBitmapMesh(image, mesh.cols, mesh.rows, mesh.verts, 0, null, 0, paint)
+                canvas.restore()
+            } else {
+                dest.set(left, top, left + dw, top + dh)
+                canvas.drawBitmap(image, null, dest, paint)
+            }
             // Cada pulso recorre lentamente un circuito; el brillo se mantiene discreto.
             paths.forEachIndexed { index, measure ->
                 val length = measure.length

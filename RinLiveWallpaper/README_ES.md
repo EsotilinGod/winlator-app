@@ -9,10 +9,19 @@ Proyecto Android Studio de un fondo animado vertical para el Xiaomi 14T.
 - Dibujo limitado a unos 30 FPS y solo mientras el fondo está visible.
 - No solicita permisos de red, ubicación, almacenamiento ni sensores.
 
-## Limitación importante
-En esta primera versión, el cabello y la ropa de Rin permanecen estáticos. Para animarlos de forma limpia y conservar exactamente el dibujo, hace falta separar cabello, cintas y prendas en capas transparentes y reconstruir lo que queda detrás de cada pieza. No se aplica una deformación global porque deformaría también el rostro y el cuerpo.
+## Brisa en pelo y ropa (v1.1)
+El lazo, el mechón izquierdo, el pañuelo amarillo y la correa del short se mecen con una brisa suave.
+Se usa una malla deformable (`Canvas.drawBitmapMesh`, 40 × 80 celdas) sobre la ilustración original:
+cada zona tiene un ancla fija y el desplazamiento crece hacia la punta (máx. ≈ 13 px en la imagen de
+1220 × 2712), con una onda viajera de 3,4 s y ráfagas lentas de 11 s. La cara está protegida por una
+máscara con peso cero. Los parámetros están en `BreezeMesh.kt`.
 
-Los trazos luminosos son una primera aproximación visual sobre los circuitos del fondo; no son un seguimiento automático de cada línea original.
+Limitación: como la deformación actúa sobre la imagen plana, el fondo que queda justo detrás de esas
+piezas también se desplaza unos píxeles. Para un resultado perfecto habría que separar pelo y ropa en
+capas transparentes y reconstruir el fondo detrás de ellas.
+
+Los trazos luminosos son una aproximación visual sobre los circuitos del fondo; no siguen
+automáticamente cada línea original.
 
 ## Requisitos para compilar
 - Android Studio actualizado.
