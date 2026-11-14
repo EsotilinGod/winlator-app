@@ -2,18 +2,25 @@ package com.example.rinlivewallpaper
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.BitmapShader
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.ComposeShader
+import android.graphics.LinearGradient
+import android.graphics.Matrix
 import android.graphics.Paint
-import android.graphics.Path
-import android.graphics.PathMeasure
+import android.graphics.PorterDuff
 import android.graphics.RectF
+import android.graphics.Shader
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
 import android.service.wallpaper.WallpaperService
 import android.view.SurfaceHolder
+import kotlin.math.PI
+import kotlin.math.sin
+import kotlin.math.sqrt
 import kotlin.random.Random
 
 class RinWallpaperService : WallpaperService() {
@@ -28,23 +35,21 @@ class RinWallpaperService : WallpaperService() {
         private val dest = RectF()
         private val frameDelay = 33L // objetivo aproximado: 30 FPS
         private val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
-        private val glowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.rgb(255, 190, 55)
-            style = Paint.Style.FILL
-            alpha = 70
-        }
-        private val corePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.rgb(255, 246, 190)
-            style = Paint.Style.FILL
-        }
         private val dotPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.rgb(255, 213, 105)
             style = Paint.Style.FILL
         }
-        private val paths = mutableListOf<PathMeasure>()
-        private val path = Path()
-        private val position = FloatArray(2)
         private val particles = List(13) { Particle(Random.nextFloat(), Random.nextFloat(), 0.12f + Random.nextFloat() * 0.2f, Random.nextFloat() * 6.28f) }
+
+        // Capa de brillo de los circuitos (generada con tools/make_circuit_glow.py, media resolución).
+        private var glow: Bitmap? = null
+        private var glowShader: BitmapShader? = null
+        private val glowBasePaint = Paint(Paint.FILTER_BITMAP_FLAG)
+        private val flows = listOf(
+            // Luces que recorren los trazos: dirección, periodo (px de la capa), velocidad (px/s), ancho, intensidad
+            Flow(-1f, 1f, 450f, 110f, 0.12f, 217),
+            Flow(1f, -1f, 650f, 80f, 0.09f, 153)
+        )
 
         private val drawFrame = object : Runnable {
             override fun run() {
@@ -59,30 +64,8 @@ class RinWallpaperService : WallpaperService() {
         init {
             bitmap = assets.open("rin_wallpaper.jpg").use { BitmapFactory.decodeStream(it) }
             breeze = bitmap?.let { BreezeMesh(it.width, it.height) }
-            buildCircuitPaths()
-        }
-
-        private fun buildCircuitPaths() {
-            // Trazos normalizados que siguen los circuitos visibles del fondo, evitando el cuerpo.
-            val traces = listOf(
-                floatArrayOf(.00f,.35f, .10f,.35f, .16f,.39f, .30f,.39f, .35f,.42f),
-                floatArrayOf(.00f,.49f, .11f,.49f, .17f,.46f, .29f,.46f, .34f,.48f),
-                floatArrayOf(.00f,.61f, .12f,.61f, .18f,.58f, .27f,.58f),
-                floatArrayOf(.98f,.10f, .91f,.10f, .88f,.14f, .88f,.27f, .83f,.30f),
-                floatArrayOf(.99f,.32f, .93f,.32f, .89f,.36f, .89f,.47f, .84f,.50f),
-                floatArrayOf(.99f,.67f, .94f,.67f, .91f,.70f, .91f,.82f, .86f,.85f),
-                floatArrayOf(.45f,.00f, .45f,.08f, .42f,.12f, .42f,.20f),
-                floatArrayOf(.67f,.00f, .67f,.08f, .71f,.12f, .71f,.20f),
-                floatArrayOf(.25f,.90f, .31f,.86f, .39f,.86f, .45f,.81f),
-                floatArrayOf(.70f,.94f, .75f,.90f, .80f,.90f, .85f,.86f)
-            )
-            for (coords in traces) {
-                val p = Path()
-                p.moveTo(coords[0], coords[1])
-                var i = 2
-                while (i < coords.size) { p.lineTo(coords[i], coords[i + 1]); i += 2 }
-                paths.add(PathMeasure(p, false))
-            }
+            glow = assets.open("circuit_glow.png").use { BitmapFactory.decodeStream(it) }
+            glowShader = glow?.let { BitmapShader(it, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP) }
         }
 
         override fun onVisibilityChanged(isVisible: Boolean) {
@@ -106,8 +89,8 @@ class RinWallpaperService : WallpaperService() {
         override fun onDestroy() {
             visible = false
             handler.removeCallbacks(drawFrame)
-            bitmap?.recycle()
-            bitmap = null
+            bitmap?.recycle(); bitmap = null
+            glow?.recycle(); glow = null
             super.onDestroy()
         }
 
@@ -148,28 +131,66 @@ class RinWallpaperService : WallpaperService() {
                 dest.set(left, top, left + dw, top + dh)
                 canvas.drawBitmap(image, null, dest, paint)
             }
-            // Cada pulso recorre lentamente un circuito; el brillo se mantiene discreto.
-            paths.forEachIndexed { index, measure ->
-                val length = measure.length
-                val phase = (elapsed * (0.10f + (index % 3) * 0.025f) + index * 0.137f) % 1f
-                measure.getPosTan(length * phase, position, null)
-                val x = position[0] * w
-                val y = position[1] * h
-                canvas.drawCircle(x, y, 14f, glowPaint)
-                canvas.drawCircle(x, y, 8f, glowPaint)
-                canvas.drawCircle(x, y, 3.2f, corePaint)
+
+            // Circuitos: brillo tenue que respira + luces que recorren los trazos.
+            val g = glow
+            val gs = glowShader
+            if (g != null && gs != null) {
+                canvas.save()
+                canvas.translate(left, top)
+                canvas.scale(dw / g.width, dh / g.height)
+                glowBasePaint.alpha = (56 + 20 * sin(2f * PI.toFloat() * elapsed / 6f)).toInt()
+                canvas.drawBitmap(g, 0f, 0f, glowBasePaint)
+                for (f in flows) {
+                    f.update(elapsed, gs)
+                    canvas.drawRect(0f, 0f, g.width.toFloat(), g.height.toFloat(), f.paint)
+                }
+                canvas.restore()
             }
+
             // Partículas tenues, con deriva vertical lenta.
             particles.forEach { particle ->
                 val raw = (particle.y - elapsed * particle.speed * 0.018f) % 1f
                 val y = if (raw < 0f) raw + 1f else raw
-                val x = particle.x + kotlin.math.sin(elapsed * 0.35f + particle.phase) * 0.006f
-                val alpha = (35 + 35 * (0.5f + 0.5f * kotlin.math.sin(elapsed * 0.8f + particle.phase))).toInt()
+                val x = particle.x + sin(elapsed * 0.35f + particle.phase) * 0.006f
+                val alpha = (35 + 35 * (0.5f + 0.5f * sin(elapsed * 0.8f + particle.phase))).toInt()
                 dotPaint.alpha = alpha
                 canvas.drawCircle(x * w, y * h, 2.0f, dotPaint)
             }
         }
+    }
+}
 
+/**
+ * Banda de luz que se desplaza a lo largo de [ux],[uy]. Se multiplica (DST_IN) por la capa de
+ * circuitos, de modo que la luz solo aparece donde hay trazos dorados.
+ */
+private class Flow(ux: Float, uy: Float, private val period: Float, private val speed: Float, width: Float, intensity: Int) {
+    private val nx: Float
+    private val ny: Float
+    private val gradient: LinearGradient
+    private val matrix = Matrix()
+    val paint = Paint(Paint.FILTER_BITMAP_FLAG).apply { alpha = intensity }
+
+    init {
+        val n = sqrt(ux * ux + uy * uy)
+        nx = ux / n; ny = uy / n
+        val clear = 0x00FFFFFF
+        val soft = 0x55FFFFFF
+        gradient = LinearGradient(
+            0f, 0f, nx * period, ny * period,
+            intArrayOf(clear, clear, soft, Color.WHITE, soft, clear, clear),
+            floatArrayOf(0f, 0.5f - width, 0.5f - width * 0.45f, 0.5f, 0.5f + width * 0.45f, 0.5f + width, 1f),
+            Shader.TileMode.REPEAT
+        )
+    }
+
+    fun update(t: Float, glow: BitmapShader) {
+        val d = (speed * t) % period
+        matrix.setTranslate(nx * d, ny * d)
+        gradient.setLocalMatrix(matrix)
+        // Se recrea el ComposeShader para que el cambio de matriz se aplique en todas las versiones de Android.
+        paint.shader = ComposeShader(glow, gradient, PorterDuff.Mode.DST_IN)
     }
 }
 

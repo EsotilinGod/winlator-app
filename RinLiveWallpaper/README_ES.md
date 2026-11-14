@@ -20,8 +20,14 @@ Limitación: como la deformación actúa sobre la imagen plana, el fondo que que
 piezas también se desplaza unos píxeles. Para un resultado perfecto habría que separar pelo y ropa en
 capas transparentes y reconstruir el fondo detrás de ellas.
 
-Los trazos luminosos son una aproximación visual sobre los circuitos del fondo; no siguen
-automáticamente cada línea original.
+## Circuitos iluminados (v1.2)
+`app/src/main/assets/circuit_glow.png` es una capa con los trazos dorados del fondo, extraída por
+color de la ilustración y sin la silueta de Rin (script: `tools/make_circuit_glow.py`). Sobre ella:
+- Brillo tenue permanente que "respira" (ciclo de 6 s).
+- Dos bandas de luz que recorren los trazos en diagonal (`Flow` en `RinWallpaperService.kt`); la luz
+  solo aparece donde hay circuito porque la banda se multiplica por la capa (`ComposeShader`, DST_IN).
+
+Algunos trazos muy finos o tapados por Rin no forman parte de la capa.
 
 ## Requisitos para compilar
 - Android Studio actualizado.
@@ -48,4 +54,4 @@ automáticamente cada línea original.
 El servicio está en:
 `app/src/main/java/com/example/rinlivewallpaper/RinWallpaperService.kt`
 
-La frecuencia se controla con `frameDelay = 33L`. Los trazos de luz están en `buildCircuitPaths()`.
+La frecuencia se controla con `frameDelay = 33L`. La intensidad, velocidad y dirección de las luces están en la lista `flows`.
