@@ -48,10 +48,10 @@ class BreezeMesh(private val imgW: Int, private val imgH: Int) {
 
     // Parámetros calibrados sobre rin_wallpaper.jpg (1220 × 2712) con un prototipo previo.
     private val flaps = listOf(
-        Flap(.470f, .240f, .125f, .062f, .495f, .290f, 230f, 1.0f, 0.12f, 9f, 0.0f), // lazo
-        Flap(.390f, .340f, .100f, .040f, .475f, .318f, 210f, 0.25f, 1.0f, 6f, 1.1f), // mechón izq.
-        Flap(.310f, .465f, .190f, .068f, .470f, .410f, 450f, 0.20f, 1.0f, 13f, 2.0f), // pañuelo
-        Flap(.620f, .590f, .100f, .078f, .600f, .530f, 290f, 1.0f, -0.08f, 5f, 3.1f)  // correa
+        Flap(.470f, .240f, .125f, .062f, .495f, .290f, 230f, 1.0f, 0.12f, 15f, 0.0f), // lazo
+        Flap(.390f, .340f, .100f, .040f, .475f, .318f, 210f, 0.25f, 1.0f, 10f, 1.1f), // mechón izq.
+        Flap(.310f, .465f, .190f, .068f, .470f, .410f, 450f, 0.20f, 1.0f, 22f, 2.0f), // pañuelo
+        Flap(.620f, .590f, .100f, .078f, .600f, .530f, 290f, 1.0f, -0.08f, 9f, 3.1f)  // correa
     )
     private val faceCx = .505f; private val faceCy = .350f
     private val faceRx = .062f; private val faceRy = .036f

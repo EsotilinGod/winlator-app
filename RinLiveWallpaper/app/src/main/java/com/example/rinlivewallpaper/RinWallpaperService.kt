@@ -5,6 +5,7 @@ import android.graphics.BitmapFactory
 import android.graphics.BitmapShader
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.ColorSpace
 import android.graphics.ComposeShader
 import android.graphics.LinearGradient
 import android.graphics.Matrix
@@ -46,6 +47,7 @@ class RinWallpaperService : WallpaperService() {
         private var glow: Bitmap? = null
         private var glowShader: BitmapShader? = null
         private val glowBasePaint = Paint(Paint.FILTER_BITMAP_FLAG)
+        private var current: CircuitCurrent? = null // corriente por los trazos (Android 13+)
         private val flows = listOf(
             // Luces que recorren los trazos: dirección, periodo (px de la capa), velocidad (px/s), ancho, intensidad
             Flow(-1f, 1f, 450f, 110f, 0.12f, 217),
@@ -77,6 +79,17 @@ class RinWallpaperService : WallpaperService() {
             breezeLayer = assets.open("breeze_layer.png").use { BitmapFactory.decodeStream(it) }
             glow = assets.open("circuit_glow.png").use { BitmapFactory.decodeStream(it) }
             glowShader = glow?.let { BitmapShader(it, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP) }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                val opts = BitmapFactory.Options().apply {
+                    inPreferredConfig = Bitmap.Config.ARGB_8888
+                    inPreferredColorSpace = ColorSpace.get(ColorSpace.Named.SRGB) // datos, no color
+                }
+                val flow = assets.open("circuit_flow.png").use { BitmapFactory.decodeStream(it, null, opts) }
+                val g = glow
+                if (flow != null && g != null) {
+                    current = try { CircuitCurrent(g, flow) } catch (_: Exception) { null }
+                }
+            }
         }
 
         override fun onVisibilityChanged(isVisible: Boolean) {
@@ -134,6 +147,31 @@ class RinWallpaperService : WallpaperService() {
             dest.set(left, top, left + dw, top + dh)
             canvas.drawBitmap(image, null, dest, paint)
 
+            // Circuitos (debajo de las piezas con brisa, para que el pañuelo los tape al moverse).
+            val g = glow
+            val gs = glowShader
+            if (g != null && gs != null) {
+                canvas.save()
+                canvas.translate(left, top)
+                canvas.scale(dw / g.width, dh / g.height)
+                val breathing = 0.22f + 0.08f * sin(2f * PI.toFloat() * elapsed / 6f)
+                val cur = current
+                if (cur != null) {
+                    // Android 13+: brillo base + corriente periódica que sigue los trazos (GPU).
+                    cur.update(elapsed, breathing)
+                    canvas.drawRect(0f, 0f, g.width.toFloat(), g.height.toFloat(), cur.paint)
+                } else {
+                    // Versiones anteriores: brillo base + bandas diagonales.
+                    glowBasePaint.alpha = (breathing * 255).toInt()
+                    canvas.drawBitmap(g, 0f, 0f, glowBasePaint)
+                    for (f in flows) {
+                        f.update(elapsed, gs)
+                        canvas.drawRect(0f, 0f, g.width.toFloat(), g.height.toFloat(), f.paint)
+                    }
+                }
+                canvas.restore()
+            }
+
             // Capa de piezas con brisa, deformada con la malla.
             val mesh = breeze
             val layer = breezeLayer
@@ -144,22 +182,6 @@ class RinWallpaperService : WallpaperService() {
                 canvas.scale(scale, scale)
                 canvas.translate(BreezeMesh.LAYER_X, BreezeMesh.LAYER_Y)
                 canvas.drawBitmapMesh(layer, mesh.cols, mesh.rows, mesh.verts, 0, null, 0, paint)
-                canvas.restore()
-            }
-
-            // Circuitos: brillo tenue que respira + luces que recorren los trazos.
-            val g = glow
-            val gs = glowShader
-            if (g != null && gs != null) {
-                canvas.save()
-                canvas.translate(left, top)
-                canvas.scale(dw / g.width, dh / g.height)
-                glowBasePaint.alpha = (56 + 20 * sin(2f * PI.toFloat() * elapsed / 6f)).toInt()
-                canvas.drawBitmap(g, 0f, 0f, glowBasePaint)
-                for (f in flows) {
-                    f.update(elapsed, gs)
-                    canvas.drawRect(0f, 0f, g.width.toFloat(), g.height.toFloat(), f.paint)
-                }
                 canvas.restore()
             }
 

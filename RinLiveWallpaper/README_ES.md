@@ -19,18 +19,22 @@ El lazo, el mechón izquierdo, las dos colas del pañuelo y la correa se mecen c
 - Ambos archivos se generan con `tools/make_breeze_layer.py` (OpenCV: GrabCut para el lazo; color y
   morfología para pelo, pañuelo y correa).
 
-Cada pieza tiene un ancla fija y el desplazamiento crece hacia la punta (máx. ≈ 13 px), con una onda
+Cada pieza tiene un ancla fija y el desplazamiento crece hacia la punta (máx. ≈ 22 px en el pañuelo, v1.4), con una onda
 viajera de 3,4 s y ráfagas lentas de 11 s. La cara no se mueve.
 
 Limitación: la franja de fondo que queda al descubierto cuando una pieza se desplaza es reconstruida,
 por lo que se ve algo más suave que el dibujo original (solo unos píxeles, junto a los bordes).
 
-## Circuitos iluminados (v1.2)
+## Circuitos iluminados y corriente de luz (v1.4)
 `app/src/main/assets/circuit_glow.png` es una capa con los trazos dorados del fondo, extraída por
-color de la ilustración y sin la silueta de Rin (script: `tools/make_circuit_glow.py`). Sobre ella:
+color de la ilustración y sin la silueta de Rin. `circuit_flow.png` guarda, para cada punto de
+circuito, la distancia medida a lo largo del trazo desde Rin (camino mínimo, algoritmo de Dijkstra).
+Ambos se generan con `tools/make_circuit_glow.py`.
 - Brillo tenue permanente que "respira" (ciclo de 6 s).
-- Dos bandas de luz que recorren los trazos en diagonal (`Flow` en `RinWallpaperService.kt`); la luz
-  solo aparece donde hay circuito porque la banda se multiplica por la capa (`ComposeShader`, DST_IN).
+- Android 13 o superior: cada 6 s sale de Rin una corriente de luz que recorre las pistas hacia
+  afuera (cabeza dorada brillante y estela), calculada en la GPU con un shader AGSL
+  (`CircuitCurrent.kt`).
+- Android 12 o inferior: en su lugar, dos bandas de luz diagonales (`Flow` en `RinWallpaperService.kt`).
 
 Algunos trazos muy finos o tapados por Rin no forman parte de la capa.
 
@@ -59,4 +63,4 @@ Algunos trazos muy finos o tapados por Rin no forman parte de la capa.
 El servicio está en:
 `app/src/main/java/com/example/rinlivewallpaper/RinWallpaperService.kt`
 
-La frecuencia se controla con `frameDelay = 33L`. La intensidad, velocidad y dirección de las luces están en la lista `flows`.
+La frecuencia se controla con `frameDelay = 33L`. El periodo y la velocidad de la corriente están en `CircuitCurrent.PERIOD` y `CircuitCurrent.SPEED`; la amplitud de la brisa, en la lista `flaps` de `BreezeMesh.kt`.
