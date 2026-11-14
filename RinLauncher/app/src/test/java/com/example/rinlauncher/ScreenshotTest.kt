@@ -86,6 +86,7 @@ class ScreenshotTest {
     @Test
     fun mainScreen() {
         installFakeApps()
+        MainActivity.animationsEnabled = false
         val activity = Robolectric.buildActivity(MainActivity::class.java).setup().get()
         repeat(5) { shadowOf(Looper.getMainLooper()).idle() }
 

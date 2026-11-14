@@ -37,6 +37,11 @@ import kotlin.math.abs
 
 class MainActivity : ComponentActivity() {
 
+    companion object {
+        /** Las pruebas en la JVM lo desactivan: allí el vsync es inmediato y el bucle no cedería. */
+        var animationsEnabled = true
+    }
+
     private lateinit var store: LauncherStore
     private lateinit var adapter: CarouselAdapter
     private lateinit var carousel: RecyclerView
@@ -433,8 +438,10 @@ class MainActivity : ComponentActivity() {
         }, flags)
         ContextCompat.registerReceiver(this, batteryReceiver, IntentFilter(Intent.ACTION_BATTERY_CHANGED), flags)
             ?.let { updateBattery(it) }
-        animating = true
-        Choreographer.getInstance().postFrameCallback(frameCallback)
+        if (animationsEnabled) {
+            animating = true
+            Choreographer.getInstance().postFrameCallback(frameCallback)
+        }
     }
 
     override fun onPause() {
