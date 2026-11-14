@@ -185,4 +185,11 @@
         android:id="@+id/xmb"
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
+
+    <!-- Introducción de arranque (encima de todo). -->
+    <com.example.rinlauncher.IntroView
+        android:id="@+id/intro"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:visibility="gone" />
 </FrameLayout>

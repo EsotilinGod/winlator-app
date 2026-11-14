@@ -27,6 +27,14 @@ Estilo consola tipo XrossMediaBar sobre la escena de Rin (`XmbView.kt`): fila ho
 - Ajustes: añadir/quitar apps, nueva categoría, editar categorías, tamaño de Rin y cambiar a la vista
   carrusel. Desde el carrusel, el botón con barras vuelve al XMB.
 
+## Introducción de inicio (v2.5)
+Al arrancar el launcher (no al volver de una app) se muestra una introducción de 7,8 s sincronizada con
+el sonido de encendido (`IntroView.kt`): resplandor, cintas de luz que barren la pantalla, el título
+«RIN LAUNCHER» con la fuente del usuario (`assets/fonts/intro.otf`) y un destello dorado, y un fundido
+hacia el menú. Tocar o pulsar un botón la salta. Ajustes → Introducción de inicio la activa o desactiva
+(animación y sonido). La prueba `introFrames` renderiza fotogramas; con `INTRO_VIDEO=1`,
+`introVideoFrames` genera la secuencia completa para un video de vista previa.
+
 ## Sonidos propios (v2.4)
 - Cursor (`res/raw/xmb_cursor.ogg`) y encendido (`res/raw/xmb_boot.ogg`): creaciones del usuario,
   convertidos a OGG con +11 dB y +13 dB (picos ≈ −10 dB y −8 dB).

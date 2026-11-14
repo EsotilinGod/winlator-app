@@ -168,6 +168,51 @@ class ScreenshotTest {
         assertEquals("Añadir o quitar apps", xmb.selectedTitle)
     }
 
+    /** Fotogramas de la introducción de arranque (cintas, título, destello). */
+    @Test
+    fun introFrames() {
+        val ctx = ApplicationProvider.getApplicationContext<android.app.Application>()
+        val v = IntroView(ctx)
+        v.measure(android.view.View.MeasureSpec.makeMeasureSpec(2712, android.view.View.MeasureSpec.EXACTLY),
+            android.view.View.MeasureSpec.makeMeasureSpec(1220, android.view.View.MeasureSpec.EXACTLY))
+        v.layout(0, 0, 2712, 1220)
+        v.start()
+        val out = File("build/screenshots").apply { mkdirs() }
+        for (t in listOf(1.6f, 3.2f, 4.3f, 6.4f)) {
+            v.setTime(t)
+            val bmp = Bitmap.createBitmap(2712, 1220, Bitmap.Config.ARGB_8888)
+            v.draw(Canvas(bmp))
+            File(out, "intro_${(t * 10).toInt()}.png").outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        }
+        v.setTime(8f)
+        assertEquals(android.view.View.GONE, v.visibility)
+    }
+
+    /** Fotogramas para un video de vista previa (solo con la variable de entorno INTRO_VIDEO=1). */
+    @Test
+    fun introVideoFrames() {
+        if (System.getenv("INTRO_VIDEO") != "1") return
+        val ctx = ApplicationProvider.getApplicationContext<android.app.Application>()
+        val v = IntroView(ctx)
+        v.measure(android.view.View.MeasureSpec.makeMeasureSpec(1356, android.view.View.MeasureSpec.EXACTLY),
+            android.view.View.MeasureSpec.makeMeasureSpec(610, android.view.View.MeasureSpec.EXACTLY))
+        v.layout(0, 0, 1356, 610)
+        v.start()
+        val out = File("build/intro_frames").apply { mkdirs() }
+        var i = 0
+        while (i < 200 && v.running) {
+            v.setTime(i / 20f)
+            val bmp = Bitmap.createBitmap(1356, 610, Bitmap.Config.ARGB_8888)
+            v.draw(Canvas(bmp))
+            if (v.running) {
+                // La opacidad de la vista (fundido final) se guarda aparte para componer sobre el menú real.
+                File(out, String.format("f%03d.png", i)).outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
+                File(out, "alpha.txt").appendText("${v.alpha}\n")
+            }
+            i++
+        }
+    }
+
     /** Rin al 45 % (entera) con el control de tamaño. */
     @Test
     fun smallRin() = capture("rin_45.png", null, 0.45f)

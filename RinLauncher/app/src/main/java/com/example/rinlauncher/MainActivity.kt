@@ -58,6 +58,8 @@ class MainActivity : ComponentActivity(), XmbView.Host {
     private lateinit var scene: RinSceneView
     private lateinit var xmb: XmbView
     private lateinit var sounds: MenuSounds
+    private lateinit var intro: IntroView
+    private var introStart = 0L
     /** Vista activa: estilo XMB (por defecto) o carrusel de tarjetas. */
     private val xmbMode get() = prefs.getString(KEY_VIEW, VIEW_XMB) == VIEW_XMB
     private lateinit var tabs: LinearLayout
@@ -82,6 +84,8 @@ class MainActivity : ComponentActivity(), XmbView.Host {
         private var last = 0L
         override fun doFrame(frameTimeNanos: Long) {
             if (!animating) return
+            // La introducción va a 60 FPS mientras dura; el resto del launcher, a ~30 FPS.
+            if (intro.running) intro.setTime((SystemClock.uptimeMillis() - introStart) / 1000f)
             if (frameTimeNanos - last >= 32_000_000L) {
                 last = frameTimeNanos
                 val t = ((SystemClock.uptimeMillis() - startTime) % 3_600_000L) / 1000f
@@ -203,7 +207,8 @@ class MainActivity : ComponentActivity(), XmbView.Host {
         sounds = MenuSounds(this).apply { enabled = prefs.getBoolean(KEY_SOUNDS, true) }
         xmb.onSound = { sounds.play(it) }
         // Sonido de encendido: solo al arrancar el launcher (no al volver de un juego).
-        if (savedInstanceState == null && animationsEnabled && prefs.getBoolean(KEY_BOOT_SOUND, true)) playBootSound()
+        intro = findViewById(R.id.intro)
+        if (savedInstanceState == null && animationsEnabled && prefs.getBoolean(KEY_BOOT_SOUND, true)) startIntro()
         scene.rinScale = prefs.getFloat(KEY_RIN_SCALE, 1f)
         carousel = findViewById(R.id.carousel)
         tabs = findViewById(R.id.tabs)
@@ -686,8 +691,8 @@ class MainActivity : ComponentActivity(), XmbView.Host {
                 XmbView.Item("rinsize", "Tamaño de Rin", "Actual: $pct %", glyph = XmbView.Icon.FACE),
                 if (sounds.enabled) XmbView.Item("sounds", "Sonidos del menú", "Activados · pulsa para silenciar", glyph = XmbView.Icon.SOUND)
                 else XmbView.Item("sounds", "Sonidos del menú", "Desactivados · pulsa para activar", glyph = XmbView.Icon.MUTE),
-                if (prefs.getBoolean(KEY_BOOT_SOUND, true)) XmbView.Item("bootsound", "Sonido de inicio", "Activado · pulsa para desactivar", glyph = XmbView.Icon.SOUND)
-                else XmbView.Item("bootsound", "Sonido de inicio", "Desactivado · pulsa para activar", glyph = XmbView.Icon.MUTE),
+                if (prefs.getBoolean(KEY_BOOT_SOUND, true)) XmbView.Item("bootsound", "Introducción de inicio", "Animación y sonido al abrir · activada", glyph = XmbView.Icon.SOUND)
+                else XmbView.Item("bootsound", "Introducción de inicio", "Desactivada · pulsa para activarla", glyph = XmbView.Icon.MUTE),
                 XmbView.Item("carousel", "Cambiar a vista carrusel", "Tarjetas grandes con carátulas", glyph = XmbView.Icon.DISPLAY),
                 XmbView.Item("home", "Usar como launcher predeterminado",
                     if (Shortcuts.isDefaultLauncher(this)) "Activo · accesos directos de emuladores habilitados"
@@ -708,7 +713,7 @@ class MainActivity : ComponentActivity(), XmbView.Host {
             "bootsound" -> {
                 val on = !prefs.getBoolean(KEY_BOOT_SOUND, true)
                 prefs.edit().putBoolean(KEY_BOOT_SOUND, on).apply()
-                if (on) { stopBootSound(); playBootSound() } else stopBootSound()
+                if (on) startIntro() else stopBootSound()
                 xmb.reload()
             }
             "home" -> openHomeSettings()
@@ -820,6 +825,11 @@ class MainActivity : ComponentActivity(), XmbView.Host {
     }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        // Durante la introducción, cualquier botón la salta.
+        if (intro.running) {
+            if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) intro.skip()
+            return true
+        }
         val handled = when (event.keyCode) {
             KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent.KEYCODE_DPAD_UP,
             KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER,
@@ -889,6 +899,14 @@ class MainActivity : ComponentActivity(), XmbView.Host {
     }
 
     private var bootPlayer: android.media.MediaPlayer? = null
+
+    /** Introducción animada + sonido de encendido. */
+    private fun startIntro() {
+        stopBootSound()
+        playBootSound()
+        introStart = SystemClock.uptimeMillis()
+        intro.start()
+    }
 
     private fun playBootSound() {
         bootPlayer = try {
