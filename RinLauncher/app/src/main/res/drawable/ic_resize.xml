@@ -1,0 +1,6 @@
+<!-- Flechas diagonales: redimensionar a Rin -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
+    <path android:fillColor="#C98A12"
+        android:pathData="M14,3h7v7h-2V6.41l-4.29,4.3 -1.42,-1.42L17.59,5H14V3zM3,14h2v3.59l4.29,-4.3 1.42,1.42L6.41,19H10v2H3v-7z"/>
+</vector>

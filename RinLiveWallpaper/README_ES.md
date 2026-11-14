@@ -47,6 +47,11 @@ misma escala de circuitos; los bordes de la columna se funden con él. Brisa, br
 funcionan en ambas partes (`land_glow.png`, `land_flow.png`). Ajustes: constantes `LAND_*` al inicio de
 `RinWallpaperService.kt`. La prueba `RenderTest` renderiza un fotograma en cada orientación.
 
+## Tamaño de Rin en horizontal (v1.6)
+El fondo acepta el comando `com.example.rinlivewallpaper.SET_LANDSCAPE_SCALE` (extra `scale`, 0,45–1,6)
+enviado con `WallpaperManager.sendWallpaperCommand()`; Rin Launcher lo usa desde su botón de tamaño.
+El valor se guarda y se mantiene al reiniciar. 0,45 muestra a Rin entera; 1 es el tamaño original.
+
 ## Requisitos para compilar
 - Android Studio actualizado.
 - JDK 17.

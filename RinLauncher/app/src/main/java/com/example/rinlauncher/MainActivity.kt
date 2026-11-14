@@ -42,6 +42,10 @@ class MainActivity : ComponentActivity() {
         /** Las pruebas en la JVM lo desactivan: allí el vsync es inmediato y el bucle no cedería. */
         var animationsEnabled = true
         const val RIN_WALLPAPER_PACKAGE = "com.example.rinlivewallpaper"
+        // Debe coincidir con RinWallpaperService (fondo animado).
+        const val ACTION_SET_LANDSCAPE_SCALE = "com.example.rinlivewallpaper.SET_LANDSCAPE_SCALE"
+        const val EXTRA_SCALE = "scale"
+        private const val KEY_RIN_SCALE = "rin_landscape_scale"
         /** Solo para pruebas: simula que el fondo animado de Rin está activo. */
         var forceRinWallpaper = false
     }
@@ -137,6 +141,7 @@ class MainActivity : ComponentActivity() {
         })
 
         findViewById<ImageButton>(R.id.addButton).setOnClickListener { openPicker() }
+        findViewById<ImageButton>(R.id.rinSizeButton).setOnClickListener { openRinSizeDialog() }
 
         // Medidas que dependen del tamaño real de pantalla.
         findViewById<View>(R.id.root).post { applyLayout() }
@@ -397,6 +402,68 @@ class MainActivity : ComponentActivity() {
             .show()
     }
 
+    // ---------------------------------------------------------------------------------------
+    // Tamaño de Rin (fondo animado en horizontal)
+
+    private val prefs by lazy { getSharedPreferences("launcher", MODE_PRIVATE) }
+
+    /** Envía al fondo animado el comando para redimensionar a Rin (lo recibe Engine.onCommand). */
+    private fun sendRinScale(scale: Float) {
+        val token = window.decorView.windowToken ?: return
+        try {
+            WallpaperManager.getInstance(this).sendWallpaperCommand(
+                token, ACTION_SET_LANDSCAPE_SCALE, 0, 0, 0, Bundle().apply { putFloat(EXTRA_SCALE, scale) })
+        } catch (_: Exception) {
+        }
+    }
+
+    private fun openRinSizeDialog() {
+        val min = 45; val max = 160 // %
+        var value = (prefs.getFloat(KEY_RIN_SCALE, 1f) * 100).toInt().coerceIn(min, max)
+        val label = TextView(this).apply {
+            textSize = 16f
+            setTextColor(Color.rgb(43, 47, 58))
+            gravity = Gravity.CENTER
+        }
+        fun show() { label.text = "$value %" + if (value == 100) "  (original)" else "" }
+        show()
+        val seek = android.widget.SeekBar(this).apply {
+            this.max = max - min
+            progress = value - min
+            setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
+                override fun onProgressChanged(sb: android.widget.SeekBar?, p: Int, fromUser: Boolean) {
+                    value = p + min; show(); sendRinScale(value / 100f) // vista previa en vivo
+                }
+                override fun onStartTrackingTouch(sb: android.widget.SeekBar?) {}
+                override fun onStopTrackingTouch(sb: android.widget.SeekBar?) {}
+            })
+        }
+        val box = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding((24 * dp).toInt(), (8 * dp).toInt(), (24 * dp).toInt(), 0)
+            addView(label)
+            addView(seek, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+                .apply { topMargin = (8 * dp).toInt() })
+            addView(TextView(this@MainActivity).apply {
+                text = "45 % muestra a Rin entera; 100 % es el tamaño original del dibujo."
+                textSize = 12f
+                setTextColor(Color.rgb(107, 112, 128))
+                setPadding(0, (6 * dp).toInt(), 0, 0)
+            })
+        }
+        val saved = prefs.getFloat(KEY_RIN_SCALE, 1f)
+        AlertDialog.Builder(this, R.style.Dialog_Rin)
+            .setTitle("Tamaño de Rin")
+            .setView(box)
+            .setPositiveButton("Listo") { _, _ -> prefs.edit().putFloat(KEY_RIN_SCALE, value / 100f).apply() }
+            .setNeutralButton("Restablecer") { _, _ ->
+                prefs.edit().putFloat(KEY_RIN_SCALE, 1f).apply(); sendRinScale(1f)
+            }
+            .setNegativeButton("Cancelar") { _, _ -> sendRinScale(saved) }
+            .setOnCancelListener { sendRinScale(saved) }
+            .show()
+    }
+
     private fun padded(v: View) = FrameLayout(this).apply {
         setPadding((22 * dp).toInt(), (8 * dp).toInt(), (22 * dp).toInt(), 0)
         addView(v)
@@ -447,6 +514,7 @@ class MainActivity : ComponentActivity() {
             val v = if (rinWp) View.GONE else View.VISIBLE
             background.visibility = v
             rinPanel.visibility = v
+            findViewById<View>(R.id.rinSizeButton).visibility = if (rinWp) View.VISIBLE else View.GONE
             findViewById<View>(R.id.root).post { applyLayout() }
         }
         // Las apps desinstaladas desaparecen solas.

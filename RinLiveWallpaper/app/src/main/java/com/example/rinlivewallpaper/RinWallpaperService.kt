@@ -15,6 +15,7 @@ import android.graphics.PorterDuff
 import android.graphics.RectF
 import android.graphics.Shader
 import android.os.Build
+import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
@@ -30,6 +31,13 @@ private const val RIN_CENTER_IN_IMAGE = 610f  // x del centro de Rin dentro de l
 private const val LAND_RIBBON_Y = 24f         // y del extremo del lazo en el fondo horizontal (1220 px)
 private const val RIBBON_IN_IMAGE = 515f      // y del extremo del lazo dentro de la ilustración
 private const val LAND_FADE = 160f            // px de fundido a cada lado de la columna
+
+// Comando para redimensionar a Rin en horizontal (lo envía Rin Launcher).
+const val ACTION_SET_LANDSCAPE_SCALE = "com.example.rinlivewallpaper.SET_LANDSCAPE_SCALE"
+const val EXTRA_SCALE = "scale"
+private const val KEY_LAND_SCALE = "land_scale"
+private const val MIN_LAND_SCALE = 0.45f      // Rin entera en pantalla
+private const val MAX_LAND_SCALE = 1.6f
 
 class RinWallpaperService : WallpaperService() {
     override fun onCreateEngine(): Engine = RinEngine()
@@ -97,6 +105,23 @@ class RinWallpaperService : WallpaperService() {
                     current = try { CircuitCurrent(g, flow) } catch (_: Exception) { null }
                 }
             }
+        }
+
+        // --- Tamaño de Rin en horizontal, controlado desde Rin Launcher -----------------------------
+        private val prefs = getSharedPreferences("rin_wallpaper", MODE_PRIVATE)
+        private var landScale = prefs.getFloat(KEY_LAND_SCALE, 1f).coerceIn(MIN_LAND_SCALE, MAX_LAND_SCALE)
+
+        /**
+         * Comandos que envía la app en primer plano con WallpaperManager.sendWallpaperCommand().
+         * SET_LANDSCAPE_SCALE: extra "scale" (float, 0,45–1,6). Se guarda y se aplica al instante.
+         */
+        override fun onCommand(action: String?, x: Int, y: Int, z: Int, extras: Bundle?, resultRequested: Boolean): Bundle? {
+            if (action == ACTION_SET_LANDSCAPE_SCALE && extras != null) {
+                landScale = extras.getFloat(EXTRA_SCALE, 1f).coerceIn(MIN_LAND_SCALE, MAX_LAND_SCALE)
+                prefs.edit().putFloat(KEY_LAND_SCALE, landScale).apply()
+                if (visible) drawWallpaper()
+            }
+            return null
         }
 
         override fun onVisibilityChanged(isVisible: Boolean) {
@@ -253,10 +278,12 @@ class RinWallpaperService : WallpaperService() {
             drawCircuits(canvas, landGlow, landGlowShader, landCurrent, bx, by, bg.width * bs, bg.height * bs, elapsed)
 
             // Columna con la ilustración: misma escala que el fondo lateral (1 px de ilustración = bs).
-            val s = bs
+            // Tamaño elegido desde el launcher (comando SET_LANDSCAPE_SCALE); 1 = escala del fondo.
+            val s = bs * landScale
             val colW = image.width * s
-            val colLeft = bx + (LAND_CENTER_X * bg.width - RIN_CENTER_IN_IMAGE) * s
-            val ty = by + (LAND_RIBBON_Y - RIBBON_IN_IMAGE) * s
+            val colLeft = bx + LAND_CENTER_X * bg.width * bs - RIN_CENTER_IN_IMAGE * s
+            // El lazo queda arriba; si Rin se achica, la columna se ajusta para seguir cubriendo el alto.
+            val ty = (by + LAND_RIBBON_Y * bs - RIBBON_IN_IMAGE * s).coerceIn(h - image.height * s, 0f)
             val fade = LAND_FADE * s
             if (colLeft + fade * 7919f != fadeKey) {
                 fadeKey = colLeft + fade * 7919f

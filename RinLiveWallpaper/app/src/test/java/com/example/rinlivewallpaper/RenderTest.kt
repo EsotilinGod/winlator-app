@@ -25,5 +25,14 @@ class RenderTest {
             engine.render(Canvas(bmp))
             File(out, "$name.png").outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
         }
+        // Comando de tamaño (como lo envía Rin Launcher) y fotogramas horizontales resultantes.
+        for (scale in listOf(0.45f, 1.4f)) {
+            engine.onCommand(ACTION_SET_LANDSCAPE_SCALE, 0, 0, 0,
+                android.os.Bundle().apply { putFloat(EXTRA_SCALE, scale) }, false)
+            val bmp = Bitmap.createBitmap(2712, 1220, Bitmap.Config.ARGB_8888)
+            engine.render(Canvas(bmp))
+            File(out, "horizontal_${(scale * 100).toInt()}.png").outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        }
+        engine.onCommand(ACTION_SET_LANDSCAPE_SCALE, 0, 0, 0, android.os.Bundle().apply { putFloat(EXTRA_SCALE, 1f) }, false)
     }
 }

@@ -33,6 +33,11 @@ Wallpaper**, el launcher no dibuja fondo ni Rin propios: se ve el fondo animado 
 horizontal), con Rin completa, sin recortes, y el carrusel termina antes de su cara. Con cualquier otro
 fondo de pantalla, el launcher usa su fondo interno (descrito arriba).
 
+## Tamaño de Rin (v1.6)
+Con el fondo animado de Rin activo aparece un botón con flechas diagonales en la barra superior. Abre un
+control deslizante (45 %–160 %) que redimensiona a Rin en vivo: el launcher envía el comando al fondo
+animado (`WallpaperManager.sendWallpaperCommand`). "Restablecer" vuelve al 100 %; "Cancelar" deshace.
+
 ## Consumo
 - La animación corre a ~30 FPS solo mientras el launcher está en primer plano; al abrir un juego se
   detiene por completo.
