@@ -97,7 +97,7 @@ class ScreenshotTest {
 
         // Centra la segunda tarjeta y muestra la corriente de luz a mitad de recorrido.
         activity.findViewById<CircuitBackgroundView>(R.id.background).setTime(1.6f)
-        activity.findViewById<RinPanelView>(R.id.rinPanel).setTime(1.0f)
+        activity.findViewById<RinPanelView>(R.id.rinPanel).setTime(1.6f)
         val rv = activity.findViewById<androidx.recyclerview.widget.RecyclerView>(R.id.carousel)
         (rv.layoutManager as androidx.recyclerview.widget.LinearLayoutManager).scrollToPositionWithOffset(1, 0)
         repeat(5) { shadowOf(Looper.getMainLooper()).idle() }

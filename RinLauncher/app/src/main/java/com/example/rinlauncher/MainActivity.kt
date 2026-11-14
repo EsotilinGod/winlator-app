@@ -139,10 +139,10 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun applyLayout() {
-        // El contenido termina donde empieza el pañuelo de Rin.
+        // Rin (holograma) queda a la derecha; el carrusel termina antes de su cara y se funde con ella.
         val content = findViewById<LinearLayout>(R.id.content)
-        content.setPadding(content.paddingLeft, content.paddingTop,
-            rinPanel.panelWidth - rinPanel.clearZone + (8 * dp).toInt(), content.paddingBottom)
+        val end = (content.width * (1f - rinPanel.contentEndFraction)).toInt()
+        content.setPadding(content.paddingLeft, content.paddingTop, end, content.paddingBottom)
         content.post {
             adapter.cardHeight = (carousel.height * 0.74f).toInt()
             adapter.cardWidth = (adapter.cardHeight * 0.75f).toInt()
