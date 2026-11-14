@@ -9,16 +9,21 @@ Proyecto Android Studio de un fondo animado vertical para el Xiaomi 14T.
 - Dibujo limitado a unos 30 FPS y solo mientras el fondo está visible.
 - No solicita permisos de red, ubicación, almacenamiento ni sensores.
 
-## Brisa en pelo y ropa (v1.1)
-El lazo, el mechón izquierdo, el pañuelo amarillo y la correa del short se mecen con una brisa suave.
-Se usa una malla deformable (`Canvas.drawBitmapMesh`, 40 × 80 celdas) sobre la ilustración original:
-cada zona tiene un ancla fija y el desplazamiento crece hacia la punta (máx. ≈ 13 px en la imagen de
-1220 × 2712), con una onda viajera de 3,4 s y ráfagas lentas de 11 s. La cara está protegida por una
-máscara con peso cero. Los parámetros están en `BreezeMesh.kt`.
+## Brisa en pelo y ropa (v1.3: capas separadas)
+El lazo, el mechón izquierdo, las dos colas del pañuelo y la correa se mecen con una brisa suave
+**sin deformar el fondo**:
+- `assets/breeze_layer.png`: capa que contiene solo esas piezas, recortada de la ilustración original.
+  Es lo único que se deforma (malla `Canvas.drawBitmapMesh` de 36 × 64 celdas, `BreezeMesh.kt`).
+- `assets/base_patch.png`: fondo reconstruido (inpainting) detrás de las piezas, solo donde se mueven.
+  Se pega una vez sobre la ilustración original al cargar; el resto conserva los píxeles originales.
+- Ambos archivos se generan con `tools/make_breeze_layer.py` (OpenCV: GrabCut para el lazo; color y
+  morfología para pelo, pañuelo y correa).
 
-Limitación: como la deformación actúa sobre la imagen plana, el fondo que queda justo detrás de esas
-piezas también se desplaza unos píxeles. Para un resultado perfecto habría que separar pelo y ropa en
-capas transparentes y reconstruir el fondo detrás de ellas.
+Cada pieza tiene un ancla fija y el desplazamiento crece hacia la punta (máx. ≈ 13 px), con una onda
+viajera de 3,4 s y ráfagas lentas de 11 s. La cara no se mueve.
+
+Limitación: la franja de fondo que queda al descubierto cuando una pieza se desplaza es reconstruida,
+por lo que se ve algo más suave que el dibujo original (solo unos píxeles, junto a los bordes).
 
 ## Circuitos iluminados (v1.2)
 `app/src/main/assets/circuit_glow.png` es una capa con los trazos dorados del fondo, extraída por

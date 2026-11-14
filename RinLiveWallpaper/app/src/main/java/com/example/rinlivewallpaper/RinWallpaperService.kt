@@ -30,6 +30,7 @@ class RinWallpaperService : WallpaperService() {
         private val handler = Handler(Looper.getMainLooper())
         private var bitmap: Bitmap? = null
         private var breeze: BreezeMesh? = null
+        private var breezeLayer: Bitmap? = null
         private var visible = false
         private var startTime = SystemClock.uptimeMillis()
         private val dest = RectF()
@@ -62,8 +63,18 @@ class RinWallpaperService : WallpaperService() {
         }
 
         init {
-            bitmap = assets.open("rin_wallpaper.jpg").use { BitmapFactory.decodeStream(it) }
-            breeze = bitmap?.let { BreezeMesh(it.width, it.height) }
+            // Fondo fijo: ilustración original + parche reconstruido detrás de las piezas móviles.
+            val mutable = BitmapFactory.Options().apply { inMutable = true }
+            bitmap = assets.open("rin_wallpaper.jpg").use { BitmapFactory.decodeStream(it, null, mutable) }
+            bitmap?.let { base ->
+                assets.open("base_patch.png").use { BitmapFactory.decodeStream(it) }?.let { patch ->
+                    Canvas(base).drawBitmap(patch, BreezeMesh.LAYER_X, BreezeMesh.LAYER_Y, null)
+                    patch.recycle()
+                }
+                breeze = BreezeMesh(base.width, base.height)
+            }
+            // Capa móvil: solo lazo, mechón, pañuelo y correa.
+            breezeLayer = assets.open("breeze_layer.png").use { BitmapFactory.decodeStream(it) }
             glow = assets.open("circuit_glow.png").use { BitmapFactory.decodeStream(it) }
             glowShader = glow?.let { BitmapShader(it, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP) }
         }
@@ -90,6 +101,7 @@ class RinWallpaperService : WallpaperService() {
             visible = false
             handler.removeCallbacks(drawFrame)
             bitmap?.recycle(); bitmap = null
+            breezeLayer?.recycle(); breezeLayer = null
             glow?.recycle(); glow = null
             super.onDestroy()
         }
@@ -118,18 +130,21 @@ class RinWallpaperService : WallpaperService() {
             val top = (h - dh) / 2f
             val elapsed = (SystemClock.uptimeMillis() - startTime) / 1000f
 
-            // Ilustración con brisa: misma imagen, deformada solo en pelo, lazo, pañuelo y correa.
+            // Fondo fijo (nunca se deforma).
+            dest.set(left, top, left + dw, top + dh)
+            canvas.drawBitmap(image, null, dest, paint)
+
+            // Capa de piezas con brisa, deformada con la malla.
             val mesh = breeze
-            if (mesh != null) {
+            val layer = breezeLayer
+            if (mesh != null && layer != null) {
                 mesh.update(elapsed)
                 canvas.save()
                 canvas.translate(left, top)
                 canvas.scale(scale, scale)
-                canvas.drawBitmapMesh(image, mesh.cols, mesh.rows, mesh.verts, 0, null, 0, paint)
+                canvas.translate(BreezeMesh.LAYER_X, BreezeMesh.LAYER_Y)
+                canvas.drawBitmapMesh(layer, mesh.cols, mesh.rows, mesh.verts, 0, null, 0, paint)
                 canvas.restore()
-            } else {
-                dest.set(left, top, left + dw, top + dh)
-                canvas.drawBitmap(image, null, dest, paint)
             }
 
             // Circuitos: brillo tenue que respira + luces que recorren los trazos.

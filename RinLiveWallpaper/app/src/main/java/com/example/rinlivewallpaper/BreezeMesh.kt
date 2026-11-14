@@ -7,9 +7,11 @@ import kotlin.math.sin
 import kotlin.math.sqrt
 
 /**
- * Brisa suave sobre la ilustración mediante una malla deformable (Canvas.drawBitmapMesh).
+ * Brisa suave mediante una malla deformable (Canvas.drawBitmapMesh) aplicada SOLO a la capa
+ * breeze_layer.png, que contiene únicamente las piezas que se mecen (lazo, mechón, pañuelo, correa).
+ * El fondo se dibuja aparte, fijo, así que los circuitos no se deforman.
  *
- * Solo se desplazan los vértices dentro de zonas de pelo y ropa ("flaps"). Cada zona tiene un
+ * Los vértices se desplazan dentro de zonas de pelo y ropa ("flaps"). Cada zona tiene un
  * ancla fija (raíz del lazo, nacimiento del mechón, nudo del pañuelo, hebilla de la correa) y el
  * desplazamiento crece hacia la punta, como en una viga en voladizo. Una onda viajera
  * (fase - k·distancia) hace que la punta vaya retrasada respecto de la raíz. La cara está
@@ -19,6 +21,14 @@ import kotlin.math.sqrt
  * activos (unos cientos de los ~3300), así que la CPU apenas trabaja.
  */
 class BreezeMesh(private val imgW: Int, private val imgH: Int) {
+
+    companion object {
+        // Recorte de breeze_layer.png dentro de la ilustración (ver tools/make_breeze_layer.py).
+        const val LAYER_X = 180f
+        const val LAYER_Y = 520f
+        const val LAYER_W = 720f
+        const val LAYER_H = 1280f
+    }
 
     private class Flap(
         val cx: Float, val cy: Float, val rx: Float, val ry: Float, // elipse de influencia (normalizada)
@@ -46,24 +56,26 @@ class BreezeMesh(private val imgW: Int, private val imgH: Int) {
     private val faceCx = .505f; private val faceCy = .350f
     private val faceRx = .062f; private val faceRy = .036f
 
-    val cols = 40
-    val rows = 80
+    val cols = 36
+    val rows = 64
     private val base = FloatArray((cols + 1) * (rows + 1) * 2)
     val verts = FloatArray(base.size)
 
     init {
         var k = 0
         for (r in 0..rows) for (c in 0..cols) {
-            base[k++] = imgW * c / cols.toFloat()
-            base[k++] = imgH * r / rows.toFloat()
+            // Coordenadas locales de la capa (lo que consume drawBitmapMesh).
+            base[k++] = LAYER_W * c / cols
+            base[k++] = LAYER_H * r / rows
         }
         base.copyInto(verts)
 
         for (f in flaps) {
             val idx = ArrayList<Int>(); val wts = ArrayList<Float>(); val dst = ArrayList<Float>()
-            for (r in 1 until rows) for (c in 1 until cols) { // el borde de la imagen nunca se mueve
+            for (r in 1 until rows) for (c in 1 until cols) { // el borde de la capa nunca se mueve
                 val v = r * (cols + 1) + c
-                val px = base[v * 2]; val py = base[v * 2 + 1]
+                // Los pesos se evalúan en coordenadas de la ilustración completa.
+                val px = base[v * 2] + LAYER_X; val py = base[v * 2 + 1] + LAYER_Y
                 val nx = px / imgW; val ny = py / imgH
                 val er = hypot((nx - f.cx) / f.rx, (ny - f.cy) / f.ry)
                 val ell = 1f - smoothstep(0.75f, 1.15f, er)
