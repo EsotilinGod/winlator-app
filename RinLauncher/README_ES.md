@@ -7,8 +7,10 @@ Es una app aparte: no reemplaza la pantalla de inicio del teléfono.
 - **Pantalla horizontal a pantalla completa** (gira según el sensor entre ambas orientaciones horizontales).
 - **Fondo de circuitos dorados** generados, con una corriente de luz periódica (cada 6 s) que nace del
   lado de Rin, y partículas tenues.
-- **Rin a la derecha**, con la misma brisa del fondo animado (lazo, mechón, pañuelo y correa) y el
-  borde fundido con los circuitos.
+- **Rin a la derecha, recortada sin fondo** (PNG con transparencia) sobre los circuitos grandes del
+  launcher, con un halo dorado suave y la misma brisa del fondo animado (lazo, mechón, pañuelo y correa).
+  El recorte se genera con `tools/make_rin_cutout.py` (modelo de segmentación `isnet-anime` de rembg +
+  limpieza por contorno) a partir de `tools/source/`.
 - **Carrusel de tarjetas**: la tarjeta central se agranda y tiene borde dorado.
   - Toca una tarjeta lateral para centrarla; toca la central para abrir la app.
   - Mantén pulsada una tarjeta para: cambiar el nombre, elegir carátula de la galería, quitar la
@@ -31,7 +33,7 @@ Es una app aparte: no reemplaza la pantalla de inicio del teléfono.
 - `MainActivity.kt`: pantalla, carrusel, pestañas, menús y barra de estado.
 - `LauncherStore.kt`: datos (apps, nombres, carátulas, categorías) en `files/launcher.json`.
 - `CircuitBackgroundView.kt`: fondo de circuitos y corriente de luz.
-- `RinPanelView.kt` + `BreezeMesh.kt`: Rin con brisa.
+- `RinPanelView.kt` + `BreezeMesh.kt`: Rin recortada con halo y brisa (`assets/rin_static.png`, `assets/breeze_layer.png`).
 - `CarouselAdapter.kt`, `AppPickerDialog.kt`, `BatteryView.kt`.
 - `src/test/.../ScreenshotTest.kt`: prueba con Robolectric que abre la pantalla con apps de ejemplo,
   verifica la carga de datos y guarda una captura en `app/build/screenshots/main.png`.
