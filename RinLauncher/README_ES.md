@@ -3,19 +3,9 @@
 Launcher horizontal tipo consola para el Xiaomi 14T, con la estética del fondo animado de Rin.
 Es una app aparte: no reemplaza la pantalla de inicio del teléfono.
 
-## Qué incluye (v1.0)
+## Qué incluye
 - **Pantalla horizontal a pantalla completa** (gira según el sensor entre ambas orientaciones horizontales).
-- **Fondo original del fondo de pantalla, en horizontal** (v1.4): la ilustración sin Rin (reconstruida
-  con el modelo LaMa) y traspuesta a 2712 × 1220, la pantalla del Xiaomi 14T, sin reescalar. Sus
-  circuitos brillan tenuemente y, en Android 13+, una corriente de luz nace de Rin cada 6 s y recorre
-  las pistas (mismo shader AGSL que el fondo animado). Lo genera `tools/make_launcher_bg.py`.
-- **Rin grande a la derecha, detrás del carrusel** (v1.3), a todo color y recortada sin fondo sobre
-  los circuitos, con un halo dorado suave. Respira suavemente (ciclo de 4,2 s) y mantiene la brisa del
-  fondo animado (lazo, mechón, pañuelo y correa). El carrusel termina antes de su cara.
-  Con `HOLOGRAM = true` en `RinPanelView.kt` se muestra como holograma dorado (tinte, líneas de
-  escaneo, banda de luz e interferencia). Tamaño y posición: `SIZE` y `CENTER_X`.
-  El recorte sin fondo se genera con `tools/make_rin_cutout.py` (modelo `isnet-anime` de rembg +
-  limpieza por contorno) a partir de `tools/source/`.
+
 - **Carrusel de tarjetas**: la tarjeta central se agranda y tiene borde dorado.
   - Toca una tarjeta lateral para centrarla; toca la central para abrir la app.
   - Mantén pulsada una tarjeta para: cambiar el nombre, elegir carátula de la galería, quitar la
@@ -27,16 +17,16 @@ Es una app aparte: no reemplaza la pantalla de inicio del teléfono.
 - **Barra de estado propia**: hora, fecha, batería (nivel, icono y si está cargando) y temperatura de
   la batería, que cambia a naranja desde 39 °C y a rojo desde 43 °C.
 
-## Con el fondo animado de Rin (v1.5)
-El launcher muestra el fondo de pantalla del sistema detrás. Si el fondo activo es **Rin Live
-Wallpaper**, el launcher no dibuja fondo ni Rin propios: se ve el fondo animado (que tiene modo
-horizontal), con Rin completa, sin recortes, y el carrusel termina antes de su cara. Con cualquier otro
-fondo de pantalla, el launcher usa su fondo interno (descrito arriba).
+## Escena de Rin (v1.7)
+El launcher dibuja él mismo la escena horizontal del fondo animado (`RinSceneView.kt`): la ilustración
+original completa (sin recortes) en una columna a la derecha, fundida con el fondo original sin Rin
+traspuesto a horizontal, con brisa, circuitos con corriente de luz y partículas. No depende del fondo de
+pantalla del sistema: HyperOS no gira el fondo de pantalla en horizontal (lo amplía y recorta en
+vertical), así que mostrarlo detrás del launcher no funcionaba.
 
-## Tamaño de Rin (v1.6)
-Con el fondo animado de Rin activo aparece un botón con flechas diagonales en la barra superior. Abre un
-control deslizante (45 %–160 %) que redimensiona a Rin en vivo: el launcher envía el comando al fondo
-animado (`WallpaperManager.sendWallpaperCommand`). "Restablecer" vuelve al 100 %; "Cancelar" deshace.
+## Tamaño de Rin
+Botón con flechas diagonales en la barra superior: control deslizante del 45 % (Rin entera) al 160 %,
+con vista previa en vivo. "Listo" guarda, "Restablecer" vuelve al 100 %, "Cancelar" deshace.
 
 ## Consumo
 - La animación corre a ~30 FPS solo mientras el launcher está en primer plano; al abrir un juego se
@@ -48,8 +38,7 @@ animado (`WallpaperManager.sendWallpaperCommand`). "Restablecer" vuelve al 100 %
 ## Estructura
 - `MainActivity.kt`: pantalla, carrusel, pestañas, menús y barra de estado.
 - `LauncherStore.kt`: datos (apps, nombres, carátulas, categorías) en `files/launcher.json`.
-- `CircuitBackgroundView.kt` + `CircuitCurrent.kt`: fondo original, brillo de circuitos y corriente de luz.
-- `RinPanelView.kt` + `BreezeMesh.kt`: Rin con respiración y brisa (opción holograma) (`assets/rin_static.png`, `assets/breeze_layer.png`).
+- `RinSceneView.kt` + `BreezeMesh.kt` + `CircuitCurrent.kt`: escena de Rin (ilustración, brisa, circuitos y corriente).
 - `CarouselAdapter.kt`, `AppPickerDialog.kt`, `BatteryView.kt`.
 - `src/test/.../ScreenshotTest.kt`: prueba con Robolectric que abre la pantalla con apps de ejemplo,
   verifica la carga de datos y guarda una captura en `app/build/screenshots/main.png`.

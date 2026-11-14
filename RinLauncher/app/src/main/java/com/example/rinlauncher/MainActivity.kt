@@ -1,7 +1,6 @@
 package com.example.rinlauncher
 
 import android.app.AlertDialog
-import android.app.WallpaperManager
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -41,21 +40,14 @@ class MainActivity : ComponentActivity() {
     companion object {
         /** Las pruebas en la JVM lo desactivan: allí el vsync es inmediato y el bucle no cedería. */
         var animationsEnabled = true
-        const val RIN_WALLPAPER_PACKAGE = "com.example.rinlivewallpaper"
-        // Debe coincidir con RinWallpaperService (fondo animado).
-        const val ACTION_SET_LANDSCAPE_SCALE = "com.example.rinlivewallpaper.SET_LANDSCAPE_SCALE"
-        const val EXTRA_SCALE = "scale"
         private const val KEY_RIN_SCALE = "rin_landscape_scale"
-        /** Solo para pruebas: simula que el fondo animado de Rin está activo. */
-        var forceRinWallpaper = false
     }
 
     private lateinit var store: LauncherStore
     private lateinit var adapter: CarouselAdapter
     private lateinit var carousel: RecyclerView
     private lateinit var layoutManager: LinearLayoutManager
-    private lateinit var background: CircuitBackgroundView
-    private lateinit var rinPanel: RinPanelView
+    private lateinit var scene: RinSceneView
     private lateinit var tabs: LinearLayout
     private lateinit var title: TextView
     private lateinit var hint: TextView
@@ -70,8 +62,6 @@ class MainActivity : ComponentActivity() {
     private var currentCategory: String? = null // null = "Todos"
     private var visibleApps: List<AppEntry> = emptyList()
     private var pendingCover: String? = null
-    /** true si el fondo de pantalla activo es el fondo animado de Rin: se muestra detrás del launcher. */
-    private var usingRinWallpaper = false // clave pkg/activity de la app que recibe la carátula
 
     // --- Animación (fondo y Rin) a ~30 FPS, solo mientras la app está en primer plano ---
     private val startTime = SystemClock.uptimeMillis()
@@ -83,8 +73,7 @@ class MainActivity : ComponentActivity() {
             if (frameTimeNanos - last >= 32_000_000L) {
                 last = frameTimeNanos
                 val t = ((SystemClock.uptimeMillis() - startTime) % 3_600_000L) / 1000f
-                background.setTime(t)
-                rinPanel.setTime(t)
+                scene.setTime(t)
             }
             Choreographer.getInstance().postFrameCallback(this)
         }
@@ -112,8 +101,8 @@ class MainActivity : ComponentActivity() {
         setContentView(R.layout.activity_main)
         goImmersive()
 
-        background = findViewById(R.id.background)
-        rinPanel = findViewById(R.id.rinPanel)
+        scene = findViewById(R.id.scene)
+        scene.rinScale = prefs.getFloat(KEY_RIN_SCALE, 1f)
         carousel = findViewById(R.id.carousel)
         tabs = findViewById(R.id.tabs)
         title = findViewById(R.id.selectedTitle)
@@ -150,10 +139,9 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun applyLayout() {
-        // Rin queda a la derecha; el carrusel termina antes de su cara y se funde con ella.
-        // Con el fondo animado, Rin está centrada en el 72 % del ancho (su cara empieza en ~69 %).
+        // Rin queda a la derecha (centro en el 72 % del ancho); el carrusel termina antes de su cara.
         val content = findViewById<LinearLayout>(R.id.content)
-        val endFraction = if (usingRinWallpaper) 0.64f else rinPanel.contentEndFraction
+        val endFraction = 0.64f // la cara de Rin empieza en ~69 % del ancho
         val end = (content.width * (1f - endFraction)).toInt()
         content.setPadding(content.paddingLeft, content.paddingTop, end, content.paddingBottom)
         content.post {
@@ -403,18 +391,13 @@ class MainActivity : ComponentActivity() {
     }
 
     // ---------------------------------------------------------------------------------------
-    // Tamaño de Rin (fondo animado en horizontal)
+    // Tamaño de Rin
 
     private val prefs by lazy { getSharedPreferences("launcher", MODE_PRIVATE) }
 
-    /** Envía al fondo animado el comando para redimensionar a Rin (lo recibe Engine.onCommand). */
+    /** Aplica el tamaño de Rin a la escena (vista previa en vivo). */
     private fun sendRinScale(scale: Float) {
-        val token = window.decorView.windowToken ?: return
-        try {
-            WallpaperManager.getInstance(this).sendWallpaperCommand(
-                token, ACTION_SET_LANDSCAPE_SCALE, 0, 0, 0, Bundle().apply { putFloat(EXTRA_SCALE, scale) })
-        } catch (_: Exception) {
-        }
+        scene.rinScale = scale
     }
 
     private fun openRinSizeDialog() {
@@ -504,19 +487,6 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         goImmersive()
-        // ¿Está activo el fondo animado de Rin? Entonces el launcher es transparente y se ve detrás.
-        val rinWp = try {
-            WallpaperManager.getInstance(this).wallpaperInfo?.packageName == RIN_WALLPAPER_PACKAGE
-        } catch (_: Exception) { false } || forceRinWallpaper
-        val shownInternal = background.visibility == View.VISIBLE
-        if (rinWp != usingRinWallpaper || shownInternal == rinWp) {
-            usingRinWallpaper = rinWp
-            val v = if (rinWp) View.GONE else View.VISIBLE
-            background.visibility = v
-            rinPanel.visibility = v
-            findViewById<View>(R.id.rinSizeButton).visibility = if (rinWp) View.VISIBLE else View.GONE
-            findViewById<View>(R.id.root).post { applyLayout() }
-        }
         // Las apps desinstaladas desaparecen solas.
         val before = store.apps.size
         store.load()
@@ -529,7 +499,7 @@ class MainActivity : ComponentActivity() {
         }, flags)
         ContextCompat.registerReceiver(this, batteryReceiver, IntentFilter(Intent.ACTION_BATTERY_CHANGED), flags)
             ?.let { updateBattery(it) }
-        if (animationsEnabled && !usingRinWallpaper) {
+        if (animationsEnabled) {
             animating = true
             Choreographer.getInstance().postFrameCallback(frameCallback)
         }

@@ -86,18 +86,13 @@ class ScreenshotTest {
     @Test
     fun mainScreen() = capture("main.png", null)
 
-    /** Con el fondo animado de Rin activo: launcher transparente sobre un fotograma del fondo. */
+    /** Rin al 45 % (entera) con el control de tamaño. */
     @Test
-    fun overRinWallpaper() {
-        val frame = File("../../RinLiveWallpaper/app/build/screenshots/horizontal.png")
-        if (!frame.exists()) return // se genera con la prueba RenderTest del fondo animado
-        capture("over_wallpaper.png", android.graphics.BitmapFactory.decodeFile(frame.path))
-    }
+    fun smallRin() = capture("rin_45.png", null, 0.45f)
 
-    private fun capture(name: String, wallpaper: Bitmap?) {
+    private fun capture(name: String, wallpaper: Bitmap?, rinScale: Float = 1f) {
         installFakeApps()
         MainActivity.animationsEnabled = false
-        MainActivity.forceRinWallpaper = wallpaper != null
         val activity = Robolectric.buildActivity(MainActivity::class.java).setup().get()
         repeat(5) { shadowOf(Looper.getMainLooper()).idle() }
 
@@ -107,8 +102,7 @@ class ScreenshotTest {
         assertTrue(store.coverFile(store.apps[0]) != null)
 
         // Centra la segunda tarjeta y muestra la corriente de luz a mitad de recorrido.
-        activity.findViewById<CircuitBackgroundView>(R.id.background).setTime(1.6f)
-        activity.findViewById<RinPanelView>(R.id.rinPanel).setTime(1.6f)
+        activity.findViewById<RinSceneView>(R.id.scene).apply { setTime(1.6f); this.rinScale = rinScale }
         val rv = activity.findViewById<androidx.recyclerview.widget.RecyclerView>(R.id.carousel)
         (rv.layoutManager as androidx.recyclerview.widget.LinearLayoutManager).scrollToPositionWithOffset(1, 0)
         repeat(5) { shadowOf(Looper.getMainLooper()).idle() }

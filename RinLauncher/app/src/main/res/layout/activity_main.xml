@@ -4,13 +4,9 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 
-    <com.example.rinlauncher.CircuitBackgroundView
-        android:id="@+id/background"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent" />
-
-    <com.example.rinlauncher.RinPanelView
-        android:id="@+id/rinPanel"
+    <!-- Escena del fondo animado de Rin en horizontal (dibujada por el launcher). -->
+    <com.example.rinlauncher.RinSceneView
+        android:id="@+id/scene"
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
 
@@ -103,8 +99,7 @@
                 android:contentDescription="Tamaño de Rin"
                 android:padding="9dp"
                 android:scaleType="fitCenter"
-                android:src="@drawable/ic_resize"
-                android:visibility="gone" />
+                android:src="@drawable/ic_resize" />
 
             <ImageButton
                 android:id="@+id/addButton"
