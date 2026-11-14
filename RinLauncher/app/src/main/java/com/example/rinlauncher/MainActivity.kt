@@ -38,12 +38,15 @@ import java.util.Date
 import java.util.Locale
 import kotlin.math.abs
 
-class MainActivity : ComponentActivity() {
+class MainActivity : ComponentActivity(), XmbView.Host {
 
     companion object {
         /** Las pruebas en la JVM lo desactivan: allí el vsync es inmediato y el bucle no cedería. */
         var animationsEnabled = true
         private const val KEY_RIN_SCALE = "rin_landscape_scale"
+        const val KEY_VIEW = "view"
+        const val VIEW_XMB = "xmb"
+        const val VIEW_CAROUSEL = "carousel"
     }
 
     private lateinit var store: LauncherStore
@@ -51,6 +54,9 @@ class MainActivity : ComponentActivity() {
     private lateinit var carousel: RecyclerView
     private lateinit var layoutManager: LinearLayoutManager
     private lateinit var scene: RinSceneView
+    private lateinit var xmb: XmbView
+    /** Vista activa: estilo XMB (por defecto) o carrusel de tarjetas. */
+    private val xmbMode get() = prefs.getString(KEY_VIEW, VIEW_XMB) == VIEW_XMB
     private lateinit var tabs: LinearLayout
     private lateinit var title: TextView
     private lateinit var hint: TextView
@@ -77,6 +83,7 @@ class MainActivity : ComponentActivity() {
                 last = frameTimeNanos
                 val t = ((SystemClock.uptimeMillis() - startTime) % 3_600_000L) / 1000f
                 scene.setTime(t)
+                if (xmbMode) xmb.setTime(t)
             }
             Choreographer.getInstance().postFrameCallback(this)
         }
@@ -105,6 +112,8 @@ class MainActivity : ComponentActivity() {
         goImmersive()
 
         scene = findViewById(R.id.scene)
+        xmb = findViewById(R.id.xmb)
+        xmb.host = this
         scene.rinScale = prefs.getFloat(KEY_RIN_SCALE, 1f)
         carousel = findViewById(R.id.carousel)
         tabs = findViewById(R.id.tabs)
@@ -134,6 +143,8 @@ class MainActivity : ComponentActivity() {
 
         findViewById<ImageButton>(R.id.addButton).setOnClickListener { openPicker() }
         findViewById<ImageButton>(R.id.rinSizeButton).setOnClickListener { openRinSizeDialog() }
+        findViewById<ImageButton>(R.id.viewButton).setOnClickListener { setViewMode(VIEW_XMB) }
+        applyViewMode()
 
         // Medidas que dependen del tamaño real de pantalla.
         findViewById<View>(R.id.root).post { applyLayout() }
@@ -174,6 +185,7 @@ class MainActivity : ComponentActivity() {
             carousel.post { updateCarouselEffects() }
         }
         if (visibleApps.isEmpty()) { title.text = ""; adapter.focused = -1 }
+        if (::xmb.isInitialized) xmb.reload()
     }
 
     /** Escala y opacidad según la distancia al centro; la tarjeta central queda seleccionada. */
@@ -213,7 +225,10 @@ class MainActivity : ComponentActivity() {
             Toast.makeText(this, "No se puede abrir ${store.label(a)}", Toast.LENGTH_SHORT).show()
             return
         }
-        try { startActivity(intent) } catch (_: Exception) {
+        try {
+            startActivity(intent)
+            a.lastUsed = System.currentTimeMillis(); store.save()
+        } catch (_: Exception) {
             Toast.makeText(this, "No se puede abrir ${store.label(a)}", Toast.LENGTH_SHORT).show()
         }
     }
@@ -357,6 +372,7 @@ class MainActivity : ComponentActivity() {
                     val c = Category(store.newId(), name)
                     store.categories += c; store.save()
                     selectCategory(c.id)
+                    if (xmbMode) xmb.selectCategory("cat:" + c.id)
                 }
             }
             .setNegativeButton("Cancelar", null)
@@ -463,6 +479,9 @@ class MainActivity : ComponentActivity() {
         val pattern = if (DateFormat.is24HourFormat(this)) "HH:mm" else "h:mm a"
         timeText.text = SimpleDateFormat(pattern, Locale.getDefault()).format(now)
         dateText.text = SimpleDateFormat("EEEE d 'de' MMMM", Locale("es")).format(now)
+        xmb.clockText = timeText.text.toString()
+        xmb.dateText = SimpleDateFormat("EEE d/MM", Locale("es")).format(now)
+        xmb.invalidate()
     }
 
     private fun updateBattery(i: Intent) {
@@ -474,6 +493,7 @@ class MainActivity : ComponentActivity() {
         val temp = i.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, 0) / 10f
         batteryIcon.level = pct
         batteryIcon.charging = charging
+        xmb.batteryPct = pct; xmb.charging = charging; xmb.invalidate()
         batteryText.text = if (charging) "$pct %  ·  cargando" else "$pct %"
         tempText.text = String.format(Locale("es"), "%.1f °C", temp)
         // Aviso de temperatura: útil durante sesiones largas de juego.
@@ -520,6 +540,131 @@ class MainActivity : ComponentActivity() {
     }
 
     // ---------------------------------------------------------------------------------------
+    // Vista XMB
+
+    private fun setViewMode(mode: String) {
+        prefs.edit().putString(KEY_VIEW, mode).apply()
+        applyViewMode()
+    }
+
+    private fun applyViewMode() {
+        val x = xmbMode
+        findViewById<View>(R.id.content).visibility = if (x) View.GONE else View.VISIBLE
+        xmb.visibility = if (x) View.VISIBLE else View.GONE
+        if (x) { xmb.reload(); xmb.requestFocus() }
+    }
+
+    private fun iconFor(name: String): XmbView.Icon {
+        val n = name.lowercase(Locale("es"))
+        return when {
+            "jueg" in n || "game" in n -> XmbView.Icon.GAMEPAD
+            "emul" in n || "retro" in n -> XmbView.Icon.CHIP
+            "multi" in n || "vídeo" in n || "video" in n || "músic" in n || "music" in n || "pelí" in n -> XmbView.Icon.MEDIA
+            "fav" in n -> XmbView.Icon.STAR
+            else -> XmbView.Icon.FOLDER
+        }
+    }
+
+    override fun xmbCategories(): List<XmbView.Category> =
+        listOf(XmbView.Category("settings", "Ajustes", XmbView.Icon.SETTINGS),
+            XmbView.Category("all", "Todos", XmbView.Icon.ALL)) +
+            store.categories.map { XmbView.Category("cat:" + it.id, it.name, iconFor(it.name)) }
+
+    override fun xmbItems(category: XmbView.Category): List<XmbView.Item> {
+        if (category.key == "settings") {
+            val pct = (prefs.getFloat(KEY_RIN_SCALE, 1f) * 100).toInt()
+            return listOf(
+                XmbView.Item("apps", "Añadir o quitar apps", "Elige qué apps aparecen en el launcher", glyph = XmbView.Icon.PLUS),
+                XmbView.Item("newcat", "Nueva categoría", "Agrupa tus apps como quieras", glyph = XmbView.Icon.FOLDER_PLUS),
+                XmbView.Item("editcats", "Editar categorías", "Renombrar, ordenar o eliminar", glyph = XmbView.Icon.FOLDER),
+                XmbView.Item("rinsize", "Tamaño de Rin", "Actual: $pct %", glyph = XmbView.Icon.RESIZE),
+                XmbView.Item("carousel", "Cambiar a vista carrusel", "Tarjetas grandes con carátulas", glyph = XmbView.Icon.LAYOUT)
+            )
+        }
+        val id = category.key.removePrefix("cat:")
+        val list = if (category.key == "all") store.apps else store.apps.filter { id in it.categories }
+        if (list.isEmpty()) return listOf(XmbView.Item("apps", "Sin apps aquí", "Pulsa para añadir apps", glyph = XmbView.Icon.PLUS))
+        return list.map { a -> XmbView.Item(a.pkg + "/" + a.activity, store.label(a), lastUsedText(a), xmbIcon(a), payload = a) }
+    }
+
+    override fun xmbActivate(category: XmbView.Category, item: XmbView.Item) {
+        (item.payload as? AppEntry)?.let { launch(it); return }
+        when (item.key) {
+            "apps" -> openPicker()
+            "newcat" -> addCategory()
+            "editcats" -> chooseCategoryToEdit()
+            "rinsize" -> openRinSizeDialog()
+            "carousel" -> setViewMode(VIEW_CAROUSEL)
+        }
+    }
+
+    override fun xmbOptions(category: XmbView.Category, item: XmbView.Item) {
+        val a = item.payload as? AppEntry ?: return
+        val i = visibleApps.indexOf(a)
+        if (i >= 0) onCardLongClick(i)
+    }
+
+    override fun xmbCategoryChanged(category: XmbView.Category) {
+        // Mantiene el filtro de la app sincronizado (opciones, "mover" y altas usan esa categoría).
+        val newCat = when {
+            category.key == "all" -> null
+            category.key.startsWith("cat:") -> category.key.removePrefix("cat:")
+            else -> return
+        }
+        if (newCat != currentCategory) {
+            currentCategory = newCat
+            visibleApps = currentCategory?.let { id -> store.apps.filter { id in it.categories } } ?: store.apps.toList()
+        }
+    }
+
+    private fun chooseCategoryToEdit() {
+        if (store.categories.isEmpty()) {
+            Toast.makeText(this, "Aún no hay categorías", Toast.LENGTH_SHORT).show(); return
+        }
+        AlertDialog.Builder(this, R.style.Dialog_Rin)
+            .setTitle("Editar categorías")
+            .setItems(store.categories.map { it.name }.toTypedArray()) { _, i -> editCategory(store.categories[i]) }
+            .show()
+    }
+
+    private fun lastUsedText(a: AppEntry): String {
+        if (a.lastUsed <= 0L) return "Aún no la abres desde aquí"
+        val cal = java.util.Calendar.getInstance()
+        fun dayIndex(t: Long): Long { cal.timeInMillis = t; return (t + cal.get(java.util.Calendar.ZONE_OFFSET) + cal.get(java.util.Calendar.DST_OFFSET)) / 86_400_000L }
+        val days = dayIndex(System.currentTimeMillis()) - dayIndex(a.lastUsed)
+        val hour = SimpleDateFormat(if (DateFormat.is24HourFormat(this)) "HH:mm" else "h:mm a", Locale.getDefault()).format(Date(a.lastUsed))
+        return when {
+            days <= 0L -> "Último uso: hoy, $hour"
+            days == 1L -> "Último uso: ayer, $hour"
+            else -> "Último uso: hace $days días"
+        }
+    }
+
+    private val xmbIcons = HashMap<String, android.graphics.Bitmap>()
+
+    /** Icono cuadrado para el XMB: la carátula (recorte central) o el icono de la app. */
+    private fun xmbIcon(a: AppEntry): android.graphics.Bitmap? {
+        val key = a.pkg + "/" + a.activity + "|" + (a.cover ?: "")
+        return xmbIcons.getOrPut(key) {
+            val size = 192
+            val out = android.graphics.Bitmap.createBitmap(size, size, android.graphics.Bitmap.Config.ARGB_8888)
+            val c = android.graphics.Canvas(out)
+            val cover = store.coverFile(a)?.let { android.graphics.BitmapFactory.decodeFile(it.path) }
+            if (cover != null) {
+                val side = minOf(cover.width, cover.height)
+                val src = android.graphics.Rect((cover.width - side) / 2, (cover.height - side) / 2,
+                    (cover.width + side) / 2, (cover.height + side) / 2)
+                c.drawBitmap(cover, src, android.graphics.Rect(0, 0, size, size), android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG))
+                cover.recycle()
+            } else {
+                c.drawColor(Color.argb(235, 245, 246, 250))
+                store.icon(a)?.let { d -> d.setBounds(14, 14, size - 14, size - 14); d.draw(c) }
+            }
+            out
+        }
+    }
+
+    // ---------------------------------------------------------------------------------------
     // Mando (Bluetooth/USB)
     //
     // Android convierte la cruceta y el stick izquierdo en teclas DPAD (con repetición al mantener),
@@ -541,6 +686,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun updateHint() {
+        xmb.gamepadHints = gamepadConnected(); xmb.invalidate()
         hint.text = if (gamepadConnected())
             "Ⓐ Abrir   Ⓧ Editar   Ⓨ Añadir apps   L1/R1 Categorías   SELECT Tamaño de Rin"
         else "Toca para abrir · Mantén pulsado para editar"
@@ -559,6 +705,15 @@ class MainActivity : ComponentActivity() {
         // B en la pantalla principal no hace nada (no salir del launcher sin querer).
         if (event.action != KeyEvent.ACTION_DOWN) return true
         val repeat = event.repeatCount > 0
+        if (xmbMode) {
+            when (event.keyCode) {
+                KeyEvent.KEYCODE_BUTTON_Y, KeyEvent.KEYCODE_BUTTON_START -> if (!repeat) openPicker()
+                KeyEvent.KEYCODE_BUTTON_SELECT -> if (!repeat) openRinSizeDialog()
+                else -> xmb.handleKey(event.keyCode, repeat)
+            }
+            if (event.source and InputDevice.SOURCE_GAMEPAD == InputDevice.SOURCE_GAMEPAD) updateHint()
+            return true
+        }
         when (event.keyCode) {
             KeyEvent.KEYCODE_DPAD_LEFT -> moveFocus(-1)
             KeyEvent.KEYCODE_DPAD_RIGHT -> moveFocus(+1)

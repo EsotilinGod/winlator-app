@@ -21,7 +21,8 @@ data class AppEntry(
     val activity: String,
     var customLabel: String? = null,
     var cover: String? = null,
-    val categories: MutableSet<String> = mutableSetOf()
+    val categories: MutableSet<String> = mutableSetOf(),
+    var lastUsed: Long = 0L // momento en que se abrió desde el launcher (0 = nunca)
 ) {
     val component get() = ComponentName(pkg, activity)
 }
@@ -68,7 +69,8 @@ class LauncherStore(private val context: Context) {
                 apps += AppEntry(
                     o.getString("pkg"), o.getString("activity"),
                     o.optString("customLabel").ifEmpty { null },
-                    o.optString("cover").ifEmpty { null }, set
+                    o.optString("cover").ifEmpty { null }, set,
+                    o.optLong("lastUsed", 0L)
                 )
             }
         } catch (_: Exception) {
@@ -87,7 +89,8 @@ class LauncherStore(private val context: Context) {
             apps.forEach { a ->
                 put(JSONObject().put("pkg", a.pkg).put("activity", a.activity)
                     .put("customLabel", a.customLabel ?: "").put("cover", a.cover ?: "")
-                    .put("categories", JSONArray(a.categories.toList())))
+                    .put("categories", JSONArray(a.categories.toList()))
+                    .put("lastUsed", a.lastUsed))
             }
         })
         val tmp = File(file.parentFile, "launcher.json.tmp")

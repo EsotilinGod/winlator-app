@@ -46,6 +46,12 @@ class ScreenshotTest {
         "com.netflix.mediaclient" to "Netflix"
     )
 
+    private fun useView(mode: String) {
+        ApplicationProvider.getApplicationContext<android.app.Application>()
+            .getSharedPreferences("launcher", android.content.Context.MODE_PRIVATE)
+            .edit().putString(MainActivity.KEY_VIEW, mode).commit()
+    }
+
     private fun installFakeApps() {
         val ctx = ApplicationProvider.getApplicationContext<android.app.Application>()
         val spm = shadowOf(ctx.packageManager)
@@ -79,7 +85,8 @@ class ScreenshotTest {
             arr.put(JSONObject().put("pkg", pkg).put("activity", "$pkg.Main")
                 .put("customLabel", if (pkg == "org.ppsspp.ppsspp") "PSP" else "")
                 .put("cover", if (i == 0) "genshin.jpg" else "")
-                .put("categories", JSONArray(if (i < 3 || i == 5) listOf("c1") else listOf("c3"))))
+                .put("categories", JSONArray(if (i < 3 || i == 5) listOf("c1") else listOf("c3")))
+                .put("lastUsed", if (pkg == "com.winlator") System.currentTimeMillis() - 3_600_000L else 0L))
         }
         root.put("apps", arr)
         File(ctx.filesDir, "launcher.json").writeText(root.toString())
@@ -92,6 +99,7 @@ class ScreenshotTest {
     @Test
     fun gamepadNavigation() {
         installFakeApps()
+        useView(MainActivity.VIEW_CAROUSEL)
         MainActivity.animationsEnabled = false
         val activity = Robolectric.buildActivity(MainActivity::class.java).setup().get()
         val looper = shadowOf(Looper.getMainLooper())
@@ -122,12 +130,46 @@ class ScreenshotTest {
         assertTrue("A debe abrir una app", started != null)
     }
 
+    /** Vista XMB (por defecto): captura con la categoría "Juegos" y la segunda app elegida. */
+    @Test
+    fun xmbScreen() = capture("xmb.png", null, 1f, MainActivity.VIEW_XMB)
+
+    /** XMB con mando: ◀ ▶ categorías, ▲ ▼ apps, A abre. */
+    @Test
+    fun xmbGamepad() {
+        installFakeApps()
+        useView(MainActivity.VIEW_XMB)
+        MainActivity.animationsEnabled = false
+        val activity = Robolectric.buildActivity(MainActivity::class.java).setup().get()
+        val looper = shadowOf(Looper.getMainLooper())
+        repeat(5) { looper.idle() }
+        val xmb = activity.findViewById<XmbView>(R.id.xmb)
+        fun press(code: Int) {
+            for (action in listOf(android.view.KeyEvent.ACTION_DOWN, android.view.KeyEvent.ACTION_UP))
+                activity.dispatchKeyEvent(android.view.KeyEvent(0, 0, action, code, 0, 0, -1, 0, 0, android.view.InputDevice.SOURCE_GAMEPAD))
+            looper.idle()
+        }
+        assertEquals("Todos", xmb.selectedCategoryName)
+        assertEquals("Genshin Impact", xmb.selectedTitle)
+        press(android.view.KeyEvent.KEYCODE_DPAD_RIGHT)
+        assertEquals("Juegos", xmb.selectedCategoryName)
+        press(android.view.KeyEvent.KEYCODE_DPAD_DOWN)
+        assertEquals("Winlator", xmb.selectedTitle)
+        press(android.view.KeyEvent.KEYCODE_BUTTON_A)
+        assertTrue("A debe abrir la app", shadowOf(activity).nextStartedActivity != null)
+        press(android.view.KeyEvent.KEYCODE_DPAD_LEFT)
+        press(android.view.KeyEvent.KEYCODE_DPAD_LEFT)
+        assertEquals("Ajustes", xmb.selectedCategoryName)
+        assertEquals("Añadir o quitar apps", xmb.selectedTitle)
+    }
+
     /** Rin al 45 % (entera) con el control de tamaño. */
     @Test
     fun smallRin() = capture("rin_45.png", null, 0.45f)
 
-    private fun capture(name: String, wallpaper: Bitmap?, rinScale: Float = 1f) {
+    private fun capture(name: String, wallpaper: Bitmap?, rinScale: Float = 1f, view: String = MainActivity.VIEW_CAROUSEL) {
         installFakeApps()
+        useView(view)
         MainActivity.animationsEnabled = false
         val activity = Robolectric.buildActivity(MainActivity::class.java).setup().get()
         repeat(5) { shadowOf(Looper.getMainLooper()).idle() }
@@ -139,6 +181,13 @@ class ScreenshotTest {
 
         // Centra la segunda tarjeta y muestra la corriente de luz a mitad de recorrido.
         activity.findViewById<RinSceneView>(R.id.scene).apply { setTime(1.6f); this.rinScale = rinScale }
+        if (view == MainActivity.VIEW_XMB) {
+            val xmb = activity.findViewById<XmbView>(R.id.xmb)
+            for (code in listOf(android.view.KeyEvent.KEYCODE_DPAD_RIGHT, android.view.KeyEvent.KEYCODE_DPAD_DOWN))
+                for (action in listOf(android.view.KeyEvent.ACTION_DOWN, android.view.KeyEvent.ACTION_UP))
+                    activity.dispatchKeyEvent(android.view.KeyEvent(action, code))
+            repeat(40) { xmb.setTime(2.0f) } // deja terminar la animación de deslizamiento
+        }
         val rv = activity.findViewById<androidx.recyclerview.widget.RecyclerView>(R.id.carousel)
         (rv.layoutManager as androidx.recyclerview.widget.LinearLayoutManager).scrollToPositionWithOffset(1, 0)
         repeat(5) { shadowOf(Looper.getMainLooper()).idle() }
@@ -146,8 +195,10 @@ class ScreenshotTest {
         shadowOf(Looper.getMainLooper()).idle()
 
         val title = activity.findViewById<android.widget.TextView>(R.id.selectedTitle)
-        assertEquals("Winlator", title.text.toString())
-        assertTrue("el título debe tener ancho", title.width > 0)
+        if (view == MainActivity.VIEW_CAROUSEL) {
+            assertEquals("Winlator", title.text.toString())
+            assertTrue("el título debe tener ancho", title.width > 0)
+        }
         val root = activity.window.decorView
         // Pasada de medida y disposición pendiente (en el teléfono ocurre en el siguiente fotograma).
         root.measure(

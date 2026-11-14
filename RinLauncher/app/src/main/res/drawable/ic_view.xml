@@ -1,0 +1,6 @@
+<!-- Vista XMB: barra horizontal + columna -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
+    <path android:fillColor="#C98A12"
+        android:pathData="M3,6h18v2H3zM9,10h2v10H9zM13,11h8v2h-8zM13,15h6v2h-6z"/>
+</vector>

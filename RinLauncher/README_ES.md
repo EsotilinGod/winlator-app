@@ -17,6 +17,16 @@ Es una app aparte: no reemplaza la pantalla de inicio del teléfono.
 - **Barra de estado propia**: hora, fecha, batería (nivel, icono y si está cargando) y temperatura de
   la batería, que cambia a naranja desde 39 °C y a rojo desde 43 °C.
 
+## Vista XMB (v2.0, por defecto)
+Estilo consola tipo XrossMediaBar sobre la escena de Rin (`XmbView.kt`): fila horizontal de categorías
+(Ajustes, Todos y las tuyas, con iconos según el nombre), lista vertical de apps con el último uso
+("hoy", "ayer", "hace N días"), onda de luz animada, velo de legibilidad, reloj y batería.
+- Táctil: deslizar en horizontal cambia de categoría, en vertical de app; tocar abre; mantener pulsado
+  abre las opciones de la app.
+- Mando: ◀ ▶ / L1 R1 categorías, ▲ ▼ apps, A abrir, X opciones, Y añadir apps, SELECT tamaño de Rin.
+- Ajustes: añadir/quitar apps, nueva categoría, editar categorías, tamaño de Rin y cambiar a la vista
+  carrusel. Desde el carrusel, el botón con barras vuelve al XMB.
+
 ## Escena de Rin (v1.7)
 El launcher dibuja él mismo la escena horizontal del fondo animado (`RinSceneView.kt`): la ilustración
 original completa (sin recortes) en una columna a la derecha, fundida con el fondo original sin Rin
@@ -28,7 +38,7 @@ vertical), así que mostrarlo detrás del launcher no funcionaba.
 Botón con flechas diagonales en la barra superior: control deslizante del 45 % (Rin entera) al 160 %,
 con vista previa en vivo. "Listo" guarda, "Restablecer" vuelve al 100 %, "Cancelar" deshace.
 
-## Mando (v1.8)
+## Mando en la vista carrusel (v1.8)
 Funciona con mandos Bluetooth o USB. La cruceta y el stick izquierdo mueven el carrusel (mantener = avance
 continuo). Con un mando conectado, la línea de ayuda muestra los botones.
 
