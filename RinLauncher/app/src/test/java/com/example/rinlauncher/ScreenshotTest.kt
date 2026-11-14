@@ -104,7 +104,15 @@ class ScreenshotTest {
         rv.scrollBy(1, 0); rv.scrollBy(-1, 0)
         shadowOf(Looper.getMainLooper()).idle()
 
+        val title = activity.findViewById<android.widget.TextView>(R.id.selectedTitle)
+        assertEquals("Winlator", title.text.toString())
+        assertTrue("el título debe tener ancho", title.width > 0)
         val root = activity.window.decorView
+        // Pasada de medida y disposición pendiente (en el teléfono ocurre en el siguiente fotograma).
+        root.measure(
+            android.view.View.MeasureSpec.makeMeasureSpec(root.width, android.view.View.MeasureSpec.EXACTLY),
+            android.view.View.MeasureSpec.makeMeasureSpec(root.height, android.view.View.MeasureSpec.EXACTLY))
+        root.layout(0, 0, root.width, root.height)
         val bmp = Bitmap.createBitmap(root.width, root.height, Bitmap.Config.ARGB_8888)
         root.draw(Canvas(bmp))
         val out = File("build/screenshots").apply { mkdirs() }

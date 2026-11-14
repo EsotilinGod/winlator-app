@@ -122,6 +122,9 @@ class MainActivity : ComponentActivity() {
         carousel.layoutManager = layoutManager
         carousel.adapter = adapter
         carousel.itemAnimator = null
+        // Las tarjetas se desvanecen en los bordes en vez de cortarse junto a Rin.
+        carousel.isHorizontalFadingEdgeEnabled = true
+        carousel.setFadingEdgeLength((60 * dp).toInt())
         LinearSnapHelper().attachToRecyclerView(carousel)
         carousel.addOnScrollListener(object : RecyclerView.OnScrollListener() {
             override fun onScrolled(rv: RecyclerView, dx: Int, dy: Int) = updateCarouselEffects()
@@ -141,7 +144,7 @@ class MainActivity : ComponentActivity() {
         content.setPadding(content.paddingLeft, content.paddingTop,
             rinPanel.panelWidth - rinPanel.clearZone + (8 * dp).toInt(), content.paddingBottom)
         content.post {
-            adapter.cardHeight = (carousel.height * 0.80f).toInt()
+            adapter.cardHeight = (carousel.height * 0.74f).toInt()
             adapter.cardWidth = (adapter.cardHeight * 0.75f).toInt()
             val margin = (10 * dp).toInt()
             val side = (carousel.width - adapter.cardWidth) / 2 - margin
