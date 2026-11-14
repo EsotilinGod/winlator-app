@@ -44,6 +44,13 @@ object AppPickerDialog {
                     gravity = Gravity.CENTER_VERTICAL
                     setPadding((8 * dp).toInt(), (6 * dp).toInt(), (8 * dp).toInt(), (6 * dp).toInt())
                     layoutParams = RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+                    // Navegable con cruceta/mando: resaltado dorado al tener el foco.
+                    isFocusable = true
+                    background = android.graphics.drawable.StateListDrawable().apply {
+                        addState(intArrayOf(android.R.attr.state_focused),
+                            android.graphics.drawable.ColorDrawable(android.graphics.Color.argb(70, 242, 181, 48)))
+                        addState(intArrayOf(), android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT))
+                    }
                     addView(ImageView(context).apply { id = 1; layoutParams = LinearLayout.LayoutParams((36 * dp).toInt(), (36 * dp).toInt()) })
                     addView(TextView(context).apply {
                         id = 2; textSize = 15f

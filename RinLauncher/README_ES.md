@@ -28,6 +28,23 @@ vertical), así que mostrarlo detrás del launcher no funcionaba.
 Botón con flechas diagonales en la barra superior: control deslizante del 45 % (Rin entera) al 160 %,
 con vista previa en vivo. "Listo" guarda, "Restablecer" vuelve al 100 %, "Cancelar" deshace.
 
+## Mando (v1.8)
+Funciona con mandos Bluetooth o USB. La cruceta y el stick izquierdo mueven el carrusel (mantener = avance
+continuo). Con un mando conectado, la línea de ayuda muestra los botones.
+
+| Botón | Acción |
+|---|---|
+| ◀ ▶ | Moverse por el carrusel |
+| A | Abrir la app seleccionada |
+| X | Menú de edición |
+| Y o START | Añadir/quitar apps |
+| L1 / R1 | Categoría anterior / siguiente |
+| SELECT | Tamaño de Rin |
+| B | Cerrar menús (en la pantalla principal no hace nada) |
+
+En los menús: cruceta para moverse, A para elegir, B para cerrar. La prueba `gamepadNavigation`
+verifica la navegación, las categorías y el lanzamiento con A.
+
 ## Consumo
 - La animación corre a ~30 FPS solo mientras el launcher está en primer plano; al abrir un juego se
   detiene por completo.

@@ -9,10 +9,13 @@ import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
 import android.os.BatteryManager
 import android.os.Bundle
+import android.hardware.input.InputManager
 import android.os.SystemClock
 import android.text.format.DateFormat
 import android.view.Choreographer
 import android.view.Gravity
+import android.view.InputDevice
+import android.view.KeyEvent
 import android.view.View
 import android.widget.EditText
 import android.widget.FrameLayout
@@ -503,6 +506,8 @@ class MainActivity : ComponentActivity() {
             animating = true
             Choreographer.getInstance().postFrameCallback(frameCallback)
         }
+        inputManager.registerInputDeviceListener(gamepadListener, null)
+        updateHint()
     }
 
     override fun onPause() {
@@ -511,6 +516,86 @@ class MainActivity : ComponentActivity() {
         Choreographer.getInstance().removeFrameCallback(frameCallback)
         unregisterReceiver(clockReceiver)
         unregisterReceiver(batteryReceiver)
+        inputManager.unregisterInputDeviceListener(gamepadListener)
+    }
+
+    // ---------------------------------------------------------------------------------------
+    // Mando (Bluetooth/USB)
+    //
+    // Android convierte la cruceta y el stick izquierdo en teclas DPAD (con repetición al mantener),
+    // y en los diálogos traduce A -> aceptar y B -> atrás. Aquí se manejan los botones en la pantalla
+    // principal; los diálogos reciben sus propias teclas.
+
+    private val inputManager by lazy { getSystemService(INPUT_SERVICE) as InputManager }
+    private val gamepadListener = object : InputManager.InputDeviceListener {
+        override fun onInputDeviceAdded(id: Int) = updateHint()
+        override fun onInputDeviceRemoved(id: Int) = updateHint()
+        override fun onInputDeviceChanged(id: Int) = updateHint()
+    }
+    private var navIndex = -1 // destino de la navegación en curso (pulsaciones rápidas)
+
+    private fun gamepadConnected(): Boolean = InputDevice.getDeviceIds().any { id ->
+        val src = InputDevice.getDevice(id)?.sources ?: 0
+        (src and InputDevice.SOURCE_GAMEPAD) == InputDevice.SOURCE_GAMEPAD ||
+            (src and InputDevice.SOURCE_JOYSTICK) == InputDevice.SOURCE_JOYSTICK
+    }
+
+    private fun updateHint() {
+        hint.text = if (gamepadConnected())
+            "Ⓐ Abrir   Ⓧ Editar   Ⓨ Añadir apps   L1/R1 Categorías   SELECT Tamaño de Rin"
+        else "Toca para abrir · Mantén pulsado para editar"
+    }
+
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        val handled = when (event.keyCode) {
+            KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent.KEYCODE_DPAD_UP,
+            KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER,
+            KeyEvent.KEYCODE_BUTTON_A, KeyEvent.KEYCODE_BUTTON_B, KeyEvent.KEYCODE_BUTTON_X,
+            KeyEvent.KEYCODE_BUTTON_Y, KeyEvent.KEYCODE_BUTTON_L1, KeyEvent.KEYCODE_BUTTON_R1,
+            KeyEvent.KEYCODE_BUTTON_START, KeyEvent.KEYCODE_BUTTON_SELECT -> true
+            else -> false
+        }
+        if (!handled) return super.dispatchKeyEvent(event)
+        // B en la pantalla principal no hace nada (no salir del launcher sin querer).
+        if (event.action != KeyEvent.ACTION_DOWN) return true
+        val repeat = event.repeatCount > 0
+        when (event.keyCode) {
+            KeyEvent.KEYCODE_DPAD_LEFT -> moveFocus(-1)
+            KeyEvent.KEYCODE_DPAD_RIGHT -> moveFocus(+1)
+            KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN -> Unit
+            KeyEvent.KEYCODE_BUTTON_A, KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER ->
+                if (!repeat) visibleApps.getOrNull(adapter.focused)?.let { launch(it) }
+            KeyEvent.KEYCODE_BUTTON_X -> if (!repeat && adapter.focused in visibleApps.indices) onCardLongClick(adapter.focused)
+            KeyEvent.KEYCODE_BUTTON_Y, KeyEvent.KEYCODE_BUTTON_START -> if (!repeat) openPicker()
+            KeyEvent.KEYCODE_BUTTON_L1 -> if (!repeat) cycleCategory(-1)
+            KeyEvent.KEYCODE_BUTTON_R1 -> if (!repeat) cycleCategory(+1)
+            KeyEvent.KEYCODE_BUTTON_SELECT -> if (!repeat) openRinSizeDialog()
+        }
+        if (event.source and InputDevice.SOURCE_GAMEPAD == InputDevice.SOURCE_GAMEPAD) updateHint()
+        return true
+    }
+
+    /** Mueve la selección del carrusel y centra la tarjeta. */
+    private fun moveFocus(dir: Int) {
+        if (visibleApps.isEmpty()) return
+        val from = if (navIndex in visibleApps.indices && carousel.scrollState != RecyclerView.SCROLL_STATE_IDLE)
+            navIndex else adapter.focused.coerceAtLeast(0)
+        val target = (from + dir).coerceIn(0, visibleApps.size - 1)
+        navIndex = target
+        val v = layoutManager.findViewByPosition(target)
+        if (v != null) {
+            carousel.smoothScrollBy(((v.left + v.right) / 2f - carousel.width / 2f).toInt(), 0)
+        } else {
+            layoutManager.scrollToPositionWithOffset(target, 0)
+            carousel.post { updateCarouselEffects() }
+        }
+    }
+
+    /** L1/R1: "Todos" y luego cada categoría, en ciclo. */
+    private fun cycleCategory(dir: Int) {
+        val ids = listOf<String?>(null) + store.categories.map { it.id }
+        val i = ids.indexOf(currentCategory).coerceAtLeast(0)
+        selectCategory(ids[(i + dir + ids.size) % ids.size])
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {

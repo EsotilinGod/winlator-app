@@ -55,6 +55,8 @@ class ScreenshotTest {
                 packageName = pkg; name = "$pkg.Main"; applicationInfo = ai; nonLocalizedLabel = label; exported = true
             }
             spm.addOrUpdateActivity(act)
+            spm.addIntentFilterForActivity(ComponentName(pkg, "$pkg.Main"),
+                android.content.IntentFilter(Intent.ACTION_MAIN).apply { addCategory(Intent.CATEGORY_LAUNCHER) })
             spm.addResolveInfoForIntent(
                 Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER),
                 ResolveInfo().apply { activityInfo = act; nonLocalizedLabel = label }
@@ -85,6 +87,40 @@ class ScreenshotTest {
 
     @Test
     fun mainScreen() = capture("main.png", null)
+
+    /** Mando: ▶ avanza la selección; R1/L1 cambian de categoría; A abre la app seleccionada. */
+    @Test
+    fun gamepadNavigation() {
+        installFakeApps()
+        MainActivity.animationsEnabled = false
+        val activity = Robolectric.buildActivity(MainActivity::class.java).setup().get()
+        val looper = shadowOf(Looper.getMainLooper())
+        repeat(5) { looper.idle() }
+        val title = activity.findViewById<android.widget.TextView>(R.id.selectedTitle)
+        fun press(code: Int) {
+            for (action in listOf(android.view.KeyEvent.ACTION_DOWN, android.view.KeyEvent.ACTION_UP)) {
+                activity.dispatchKeyEvent(android.view.KeyEvent(0, 0, action, code, 0, 0, -1, 0, 0,
+                    android.view.InputDevice.SOURCE_GAMEPAD))
+            }
+            repeat(3) { looper.idleFor(java.time.Duration.ofMillis(400)) }
+        }
+        assertEquals("Genshin Impact", title.text.toString())
+        press(android.view.KeyEvent.KEYCODE_DPAD_RIGHT)
+        press(android.view.KeyEvent.KEYCODE_DPAD_RIGHT)
+        assertEquals("PSP", title.text.toString())
+        press(android.view.KeyEvent.KEYCODE_DPAD_LEFT)
+        assertEquals("Winlator", title.text.toString())
+        // R1 -> "Juegos" (Genshin, Winlator, PSP, Minecraft); L1 vuelve a "Todos".
+        press(android.view.KeyEvent.KEYCODE_BUTTON_R1)
+        val rv = activity.findViewById<androidx.recyclerview.widget.RecyclerView>(R.id.carousel)
+        assertEquals(4, rv.adapter!!.itemCount)
+        press(android.view.KeyEvent.KEYCODE_BUTTON_L1)
+        assertEquals(apps.size, rv.adapter!!.itemCount)
+        // A abre la app seleccionada.
+        press(android.view.KeyEvent.KEYCODE_BUTTON_A)
+        val started = shadowOf(activity).nextStartedActivity
+        assertTrue("A debe abrir una app", started != null)
+    }
 
     /** Rin al 45 % (entera) con el control de tamaño. */
     @Test
