@@ -34,7 +34,10 @@ class XmbView @JvmOverloads constructor(context: Context, attrs: AttributeSet? =
     // --- Modelo ---------------------------------------------------------------------------------
 
     /** Pack de iconos propio (glifos sólidos estilo consola, 48 × 48, relleno par-impar). */
-    enum class Icon { SETTINGS, ALL, GAMEPAD, CHIP, MEDIA, MUSIC, PHOTO, STAR, FOLDER, GLOBE, PLUS, FOLDER_PLUS, FOLDER_EDIT, RESIZE, LAYOUT, SOUND, MUTE }
+    enum class Icon {
+        SETTINGS, ALL, GAMEPAD, CHIP, MEDIA, MUSIC, PHOTO, STAR, FOLDER, GLOBE, PLUS, FOLDER_PLUS, FOLDER_EDIT,
+        RESIZE, LAYOUT, SOUND, MUTE, CHAT, FITNESS, RADIO, FOOD, COFFEE, PACKAGE, WRENCH, FACE, DISPLAY
+    }
 
     companion object Sounds {
         const val SOUND_NAV = 0   // moverse entre elementos
@@ -103,6 +106,11 @@ class XmbView @JvmOverloads constructor(context: Context, attrs: AttributeSet? =
     private val rect = RectF()
     private val m = Matrix()
     private val iconPaths = HashMap<Icon, Path>()
+    // Iconos PNG diseñados por el usuario (res/drawable-nodpi/xmb_icon_*.png) y su brillo precalculado.
+    private val iconBitmaps = HashMap<Icon, Bitmap>()
+    private val iconGlows = HashMap<Icon, Bitmap>()
+    private val glowPaint = Paint(Paint.FILTER_BITMAP_FLAG).apply { color = Color.rgb(255, 214, 120) }
+    private val dst = RectF()
     private val shaders = HashMap<Bitmap, BitmapShader>()   // se crean una vez por imagen
     private val boxShader = LinearGradient(0f, 0f, 1f, 1f, Color.rgb(70, 80, 120), Color.rgb(120, 130, 170), Shader.TileMode.CLAMP)
 
@@ -128,6 +136,28 @@ class XmbView @JvmOverloads constructor(context: Context, attrs: AttributeSet? =
             Icon.MUTE to "M5 17h8l11-9v32l-11-9H5zM30 18l3-3 5 5 5-5 3 3-5 5 5 5-3 3-5-5-5 5-3-3 5-5z"
         )
         for ((k, v) in defs) iconPaths[k] = PathParser.createPathFromPathData(v).apply { fillType = Path.FillType.EVEN_ODD }
+        val pngs = mapOf(
+            Icon.SETTINGS to R.drawable.xmb_icon_settings, Icon.ALL to R.drawable.xmb_icon_home,
+            Icon.GAMEPAD to R.drawable.xmb_icon_gamepad, Icon.CHIP to R.drawable.xmb_icon_handheld,
+            Icon.MEDIA to R.drawable.xmb_icon_film, Icon.MUSIC to R.drawable.xmb_icon_music,
+            Icon.PHOTO to R.drawable.xmb_icon_photo, Icon.GLOBE to R.drawable.xmb_icon_globe,
+            Icon.CHAT to R.drawable.xmb_icon_chat, Icon.FITNESS to R.drawable.xmb_icon_fitness,
+            Icon.RADIO to R.drawable.xmb_icon_radio, Icon.FOOD to R.drawable.xmb_icon_food,
+            Icon.COFFEE to R.drawable.xmb_icon_coffee, Icon.PACKAGE to R.drawable.xmb_icon_package,
+            Icon.WRENCH to R.drawable.xmb_icon_wrench, Icon.FACE to R.drawable.xmb_icon_face,
+            Icon.SOUND to R.drawable.xmb_icon_sound, Icon.DISPLAY to R.drawable.xmb_icon_display
+        )
+        val blur = Paint().apply { maskFilter = android.graphics.BlurMaskFilter(10f, android.graphics.BlurMaskFilter.Blur.NORMAL) }
+        for ((k, res) in pngs) {
+            val b = android.graphics.BitmapFactory.decodeResource(resources, res) ?: continue
+            iconBitmaps[k] = b
+            // Brillo de selección: alfa del icono difuminado, con 16 px de margen para que no se corte.
+            val pad = 16
+            val padded = Bitmap.createBitmap(b.width + pad * 2, b.height + pad * 2, Bitmap.Config.ARGB_8888)
+            Canvas(padded).drawBitmap(b, pad.toFloat(), pad.toFloat(), null)
+            iconGlows[k] = padded.extractAlpha(blur, null)
+            padded.recycle()
+        }
     }
 
     // --- API ------------------------------------------------------------------------------------
@@ -336,6 +366,21 @@ class XmbView @JvmOverloads constructor(context: Context, attrs: AttributeSet? =
     }
 
     private fun drawIcon(canvas: Canvas, icon: Icon, cx: Float, cy: Float, size: Float, alpha: Int, glow: Boolean) {
+        iconBitmaps[icon]?.let { b ->
+            // PNG: se ajusta a la caja conservando la proporción.
+            val k = size / maxOf(b.width, b.height)
+            val w = b.width * k; val h = b.height * k
+            if (glow) iconGlows[icon]?.let { g ->
+                val gk = k * 1.0f
+                dst.set(cx - g.width * gk / 2, cy - g.height * gk / 2, cx + g.width * gk / 2, cy + g.height * gk / 2)
+                glowPaint.alpha = alpha
+                canvas.drawBitmap(g, null, dst, glowPaint)
+            }
+            dst.set(cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2)
+            bmpPaint.shader = null; bmpPaint.alpha = alpha
+            canvas.drawBitmap(b, null, dst, bmpPaint)
+            return
+        }
         val p = iconPaths[icon] ?: return
         canvas.save()
         canvas.translate(cx - size / 2, cy - size / 2)

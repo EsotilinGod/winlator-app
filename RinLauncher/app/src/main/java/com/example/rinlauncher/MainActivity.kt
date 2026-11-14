@@ -566,9 +566,15 @@ class MainActivity : ComponentActivity(), XmbView.Host {
             "emul" in n || "retro" in n || "consola" in n -> XmbView.Icon.CHIP
             "músic" in n || "music" in n || "audio" in n || "radio" in n -> XmbView.Icon.MUSIC
             "foto" in n || "imag" in n || "cámara" in n || "camara" in n || "galer" in n -> XmbView.Icon.PHOTO
-            "internet" in n || "web" in n || "naveg" in n || "red" == n || "social" in n -> XmbView.Icon.GLOBE
+            "internet" in n || "web" in n || "naveg" in n || "red" == n -> XmbView.Icon.GLOBE
             "multi" in n || "vídeo" in n || "video" in n || "pelí" in n || "peli" in n || "serie" in n || "tv" == n -> XmbView.Icon.MEDIA
             "fav" in n -> XmbView.Icon.STAR
+            "social" in n || "chat" in n || "mensaj" in n || "amig" in n -> XmbView.Icon.CHAT
+            "ejerc" in n || "gym" in n || "fitness" in n || "deport" in n || "salud" in n -> XmbView.Icon.FITNESS
+            "podcast" in n || "noticia" in n -> XmbView.Icon.RADIO
+            "comida" in n || "cocina" in n || "receta" in n || "delivery" in n -> XmbView.Icon.FOOD
+            "café" in n || "cafe" in n || "relax" in n -> XmbView.Icon.COFFEE
+            "herram" in n || "útil" in n || "util" in n -> XmbView.Icon.WRENCH
             else -> XmbView.Icon.FOLDER
         }
     }
@@ -582,13 +588,13 @@ class MainActivity : ComponentActivity(), XmbView.Host {
         if (category.key == "settings") {
             val pct = (prefs.getFloat(KEY_RIN_SCALE, 1f) * 100).toInt()
             return listOf(
-                XmbView.Item("apps", "Añadir o quitar apps", "Elige qué apps aparecen en el launcher", glyph = XmbView.Icon.PLUS),
+                XmbView.Item("apps", "Añadir o quitar apps", "Elige qué apps aparecen en el launcher", glyph = XmbView.Icon.PACKAGE),
                 XmbView.Item("newcat", "Nueva categoría", "Agrupa tus apps como quieras", glyph = XmbView.Icon.FOLDER_PLUS),
-                XmbView.Item("editcats", "Editar categorías", "Renombrar, ordenar o eliminar", glyph = XmbView.Icon.FOLDER_EDIT),
-                XmbView.Item("rinsize", "Tamaño de Rin", "Actual: $pct %", glyph = XmbView.Icon.RESIZE),
+                XmbView.Item("editcats", "Editar categorías", "Renombrar, ordenar o eliminar", glyph = XmbView.Icon.WRENCH),
+                XmbView.Item("rinsize", "Tamaño de Rin", "Actual: $pct %", glyph = XmbView.Icon.FACE),
                 if (sounds.enabled) XmbView.Item("sounds", "Sonidos del menú", "Activados · pulsa para silenciar", glyph = XmbView.Icon.SOUND)
                 else XmbView.Item("sounds", "Sonidos del menú", "Desactivados · pulsa para activar", glyph = XmbView.Icon.MUTE),
-                XmbView.Item("carousel", "Cambiar a vista carrusel", "Tarjetas grandes con carátulas", glyph = XmbView.Icon.LAYOUT)
+                XmbView.Item("carousel", "Cambiar a vista carrusel", "Tarjetas grandes con carátulas", glyph = XmbView.Icon.DISPLAY)
             )
         }
         val id = category.key.removePrefix("cat:")

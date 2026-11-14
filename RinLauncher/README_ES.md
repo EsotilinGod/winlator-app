@@ -36,6 +36,10 @@ Estilo consola tipo XrossMediaBar sobre la escena de Rin (`XmbView.kt`): fila ho
   categoría, abrir y opciones. Se reproducen con `SoundPool` (`MenuSounds.kt`) con el volumen
   multimedia y se activan/desactivan en Ajustes → Sonidos del menú.
 - No se usan iconos ni sonidos de Sony: solo el estilo general.
+- v2.2: iconos PNG diseñados por el usuario (`res/drawable-nodpi/xmb_icon_*.png`, reducidos a 192 px).
+  Tienen prioridad sobre los vectoriales, que quedan como respaldo (carpeta, nueva categoría,
+  favoritos, silencio). Palabras clave extra: social/chat, ejercicio/gym, podcast/noticias,
+  comida/cocina, café, herramientas/utilidades.
 
 ## Escena de Rin (v1.7)
 El launcher dibuja él mismo la escena horizontal del fondo animado (`RinSceneView.kt`): la ilustración
