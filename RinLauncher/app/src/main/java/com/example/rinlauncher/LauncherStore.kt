@@ -22,9 +22,23 @@ data class AppEntry(
     var customLabel: String? = null,
     var cover: String? = null,
     val categories: MutableSet<String> = mutableSetOf(),
-    var lastUsed: Long = 0L // momento en que se abrió desde el launcher (0 = nunca)
+    var lastUsed: Long = 0L, // momento en que se abrió desde el launcher (0 = nunca)
+    // Accesos directos: KIND_APP = app normal; el resto guarda su propio nombre, icono y forma de abrirse.
+    val kind: String = KIND_APP,
+    val baseLabel: String? = null,      // nombre original del acceso directo
+    val intentUri: String? = null,      // KIND_INTENT y KIND_FILE: Intent serializado
+    val shortcutId: String? = null,     // KIND_PINNED: id del ShortcutInfo de la app
+    val iconFile: String? = null        // icono guardado en files/shortcut_icons/
 ) {
     val component get() = ComponentName(pkg, activity)
+    val isShortcut get() = kind != KIND_APP
+
+    companion object {
+        const val KIND_APP = "app"
+        const val KIND_INTENT = "intent"   // acceso directo clásico (EXTRA_SHORTCUT_INTENT)
+        const val KIND_PINNED = "pinned"   // acceso directo moderno (requiere ser launcher predeterminado)
+        const val KIND_FILE = "file"       // juego desde archivo: el emulador abre el archivo elegido
+    }
 }
 
 data class Category(val id: String, var name: String)
@@ -70,7 +84,12 @@ class LauncherStore(private val context: Context) {
                     o.getString("pkg"), o.getString("activity"),
                     o.optString("customLabel").ifEmpty { null },
                     o.optString("cover").ifEmpty { null }, set,
-                    o.optLong("lastUsed", 0L)
+                    o.optLong("lastUsed", 0L),
+                    o.optString("kind").ifEmpty { AppEntry.KIND_APP },
+                    o.optString("baseLabel").ifEmpty { null },
+                    o.optString("intentUri").ifEmpty { null },
+                    o.optString("shortcutId").ifEmpty { null },
+                    o.optString("iconFile").ifEmpty { null }
                 )
             }
         } catch (_: Exception) {
@@ -90,7 +109,9 @@ class LauncherStore(private val context: Context) {
                 put(JSONObject().put("pkg", a.pkg).put("activity", a.activity)
                     .put("customLabel", a.customLabel ?: "").put("cover", a.cover ?: "")
                     .put("categories", JSONArray(a.categories.toList()))
-                    .put("lastUsed", a.lastUsed))
+                    .put("lastUsed", a.lastUsed)
+                    .put("kind", a.kind).put("baseLabel", a.baseLabel ?: "").put("intentUri", a.intentUri ?: "")
+                    .put("shortcutId", a.shortcutId ?: "").put("iconFile", a.iconFile ?: ""))
             }
         })
         val tmp = File(file.parentFile, "launcher.json.tmp")
@@ -110,21 +131,64 @@ class LauncherStore(private val context: Context) {
             .sortedBy { it.label.lowercase() }
     }
 
-    private fun isInstalled(a: AppEntry): Boolean = try {
+    private fun isInstalled(a: AppEntry): Boolean = if (a.isShortcut) try {
+        pm.getPackageInfo(a.pkg, 0); true // el acceso directo vive mientras su app esté instalada
+    } catch (_: PackageManager.NameNotFoundException) {
+        false
+    } else try {
         pm.getActivityInfo(a.component, 0); true
     } catch (_: PackageManager.NameNotFoundException) {
         false
     }
 
-    fun systemLabel(a: AppEntry): String = labelCache.getOrPut(a.pkg + "/" + a.activity) {
+    fun systemLabel(a: AppEntry): String = if (a.isShortcut) a.baseLabel ?: "Acceso directo" else labelCache.getOrPut(a.pkg + "/" + a.activity) {
         try { pm.getActivityInfo(a.component, 0).loadLabel(pm).toString() } catch (_: Exception) { a.pkg }
     }
 
     fun label(a: AppEntry): String = a.customLabel ?: systemLabel(a)
 
-    fun icon(a: AppEntry): Drawable? = try { pm.getActivityIcon(a.component) } catch (_: Exception) { null }
+    fun icon(a: AppEntry): Drawable? {
+        if (a.isShortcut) {
+            a.iconFile?.let { File(shortcutIconDir, it) }?.takeIf { it.exists() }?.let { f ->
+                BitmapFactory.decodeFile(f.path)?.let { return android.graphics.drawable.BitmapDrawable(context.resources, it) }
+            }
+            return try { pm.getApplicationIcon(a.pkg) } catch (_: Exception) { null }
+        }
+        return try { pm.getActivityIcon(a.component) } catch (_: Exception) { null }
+    }
+
+    private val shortcutIconDir = File(context.filesDir, "shortcut_icons").apply { mkdirs() }
+
+    /** Guarda el icono de un acceso directo y devuelve el nombre del archivo. */
+    fun saveShortcutIcon(icon: Drawable?): String? {
+        icon ?: return null
+        val size = 192
+        val b = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+        icon.setBounds(0, 0, size, size); icon.draw(android.graphics.Canvas(b))
+        val name = "sc_${UUID.randomUUID()}.png"
+        File(shortcutIconDir, name).outputStream().use { b.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        b.recycle()
+        return name
+    }
+
+    /** Añade un acceso directo (al final, y a la categoría indicada si hay una). */
+    fun addShortcut(kind: String, pkg: String, label: String, icon: Drawable?, intentUri: String? = null,
+                    shortcutId: String? = null, category: String? = null): AppEntry {
+        val e = AppEntry(pkg, "#sc:" + newId(), kind = kind, baseLabel = label, intentUri = intentUri,
+            shortcutId = shortcutId, iconFile = saveShortcutIcon(icon))
+        category?.let { e.categories += it }
+        apps += e
+        return e
+    }
 
     fun launchIntent(a: AppEntry): Intent? {
+        if (a.kind == AppEntry.KIND_INTENT || a.kind == AppEntry.KIND_FILE) {
+            return try {
+                Intent.parseUri(a.intentUri ?: return null, Intent.URI_INTENT_SCHEME)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            } catch (_: Exception) { null }
+        }
+        if (a.isShortcut) return null // KIND_PINNED se abre con LauncherApps
         val explicit = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
             .setComponent(a.component)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED)
@@ -174,6 +238,7 @@ class LauncherStore(private val context: Context) {
     }
 
     fun removeApp(a: AppEntry) {
+        a.iconFile?.let { File(shortcutIconDir, it).delete() }
         removeCover(a)
         apps.remove(a)
     }

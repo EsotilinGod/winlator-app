@@ -24,6 +24,25 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- Opcional: permite elegir Rin Launcher como launcher predeterminado (pantalla de inicio).
+                 Solo así Android le entrega los accesos directos modernos de otras apps. -->
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.HOME" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+
+        <!-- "Añadir a la pantalla de inicio" desde otras apps (cuando Rin Launcher es el predeterminado). -->
+        <activity
+            android:name=".ConfirmPinActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            <intent-filter>
+                <action android:name="android.content.pm.action.CONFIRM_PIN_SHORTCUT" />
+            </intent-filter>
         </activity>
     </application>
 </manifest>

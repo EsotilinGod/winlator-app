@@ -27,6 +27,18 @@ Estilo consola tipo XrossMediaBar sobre la escena de Rin (`XmbView.kt`): fila ho
 - Ajustes: añadir/quitar apps, nueva categoría, editar categorías, tamaño de Rin y cambiar a la vista
   carrusel. Desde el carrusel, el botón con barras vuelve al XMB.
 
+## Accesos directos (v2.3)
+Ajustes → Añadir acceso directo (o el botón «Acceso directo…» en la lista de apps):
+- **Juego desde archivo**: eliges el emulador y el archivo del juego; el launcher lo abre con
+  `ACTION_VIEW` en ese emulador (permiso de lectura persistente). Funciona sin ser launcher predeterminado.
+- **Desde la app**: los accesos directos que ofrecen las apps en el selector de widgets
+  (`ACTION_CREATE_SHORTCUT`). Los clásicos funcionan siempre; los modernos (ShortcutManager) solo si Rin
+  Launcher es el launcher predeterminado (Ajustes → Usar como launcher predeterminado).
+- Siendo predeterminado, el «Añadir a la pantalla de inicio» de los emuladores llega directo al launcher
+  (`ConfirmPinActivity`).
+Los accesos directos se editan (nombre, carátula, categorías) igual que las apps. `Shortcuts.kt`,
+pruebas en `ShortcutsTest.kt`.
+
 ## Iconos y sonidos del menú (v2.1)
 - Pack de iconos propio en estilo consola (glifos blancos sólidos con brillo), en `XmbView.kt`. Las
   categorías eligen icono según su nombre: juegos → mando, emuladores/retro → cartucho, música → nota,

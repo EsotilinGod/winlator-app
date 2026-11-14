@@ -22,7 +22,8 @@ import androidx.recyclerview.widget.RecyclerView
  */
 object AppPickerDialog {
 
-    fun show(context: Context, store: LauncherStore, onDone: (List<InstalledApp>, Set<String>) -> Unit) {
+    fun show(context: Context, store: LauncherStore, onShortcut: (() -> Unit)? = null,
+             onDone: (List<InstalledApp>, Set<String>) -> Unit) {
         val dp = context.resources.displayMetrics.density
         val all = store.installedApps()
         val selected = store.apps.map { key(it.pkg, it.activity) }.toMutableSet()
@@ -100,6 +101,7 @@ object AppPickerDialog {
             .setTitle("Elige las aplicaciones")
             .setView(box)
             .setPositiveButton("Guardar") { _, _ -> onDone(all, selected) }
+            .apply { if (onShortcut != null) setNeutralButton("Acceso directo…") { _, _ -> onShortcut() } }
             .setNegativeButton("Cancelar", null)
             .show()
         search.visibility = View.VISIBLE

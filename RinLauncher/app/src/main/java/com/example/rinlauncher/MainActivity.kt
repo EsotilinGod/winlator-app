@@ -91,6 +91,89 @@ class MainActivity : ComponentActivity(), XmbView.Host {
         }
     }
 
+    // --- Accesos directos ---------------------------------------------------------------------
+    private var pendingProvider: String? = null   // app que está creando el acceso directo
+    private var pendingEmulator: String? = null   // emulador elegido para "juego desde archivo"
+
+    private val createShortcut = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { r ->
+        val provider = pendingProvider ?: return@registerForActivityResult
+        pendingProvider = null
+        if (r.resultCode != RESULT_OK) return@registerForActivityResult
+        val e = Shortcuts.handleCreateResult(this, store, r.data, provider, currentCategory)
+        if (e != null) {
+            Toast.makeText(this, "«${store.label(e)}» añadido", Toast.LENGTH_SHORT).show()
+            refresh(e)
+        }
+    }
+
+    private val pickGameFile = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        val emu = pendingEmulator ?: return@registerForActivityResult
+        pendingEmulator = null
+        uri ?: return@registerForActivityResult
+        try { contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) } catch (_: Exception) {}
+        val type = contentResolver.getType(uri) ?: "*/*"
+        val open = Intent(Intent.ACTION_VIEW).setDataAndType(uri, type).setPackage(emu)
+            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        val target = packageManager.resolveActivity(open, 0)
+            ?: packageManager.resolveActivity(Intent(open).setDataAndType(uri, "*/*"), 0)?.also { open.setDataAndType(uri, "*/*") }
+        if (target == null) {
+            Toast.makeText(this, "Ese emulador no acepta abrir archivos directamente. Prueba con «Desde la app» " +
+                "(sus accesos directos) o con otro emulador.", Toast.LENGTH_LONG).show()
+            return@registerForActivityResult
+        }
+        open.setClassName(target.activityInfo.packageName, target.activityInfo.name)
+        var name = "Juego"
+        contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c ->
+            if (c.moveToFirst()) name = c.getString(0).substringBeforeLast('.')
+        }
+        val icon = try { packageManager.getApplicationIcon(emu) } catch (_: Exception) { null }
+        val e = store.addShortcut(AppEntry.KIND_FILE, emu, name, icon, intentUri = open.toUri(Intent.URI_INTENT_SCHEME), category = currentCategory)
+        store.save()
+        Toast.makeText(this, "«$name» añadido. Puedes ponerle carátula con Opciones.", Toast.LENGTH_SHORT).show()
+        refresh(e)
+    }
+
+    /** Menú "Añadir acceso directo": juego desde archivo o accesos directos que ofrecen las apps. */
+    private fun openShortcutMenu() {
+        val providers = Shortcuts.providers(this)
+        val labels = listOf("Juego desde archivo (elige emulador y juego)…") +
+            providers.map { "Desde la app: " + it.loadLabel(packageManager) }
+        AlertDialog.Builder(this, R.style.Dialog_Rin)
+            .setTitle("Añadir acceso directo")
+            .setItems(labels.toTypedArray()) { _, i ->
+                if (i == 0) chooseEmulator() else {
+                    val p = providers[i - 1].activityInfo
+                    pendingProvider = p.packageName
+                    try {
+                        createShortcut.launch(Intent(Intent.ACTION_CREATE_SHORTCUT).setClassName(p.packageName, p.name))
+                    } catch (_: Exception) {
+                        pendingProvider = null
+                        Toast.makeText(this, "No se pudo abrir el creador de accesos directos de esa app", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+            .setNegativeButton("Cancelar", null)
+            .show()
+    }
+
+    private fun chooseEmulator() {
+        val apps = store.installedApps()
+        AlertDialog.Builder(this, R.style.Dialog_Rin)
+            .setTitle("¿Con qué app se abre el juego?")
+            .setItems(apps.map { it.label }.toTypedArray()) { _, i ->
+                pendingEmulator = apps[i].pkg
+                pickGameFile.launch(arrayOf("*/*"))
+            }
+            .setNegativeButton("Cancelar", null)
+            .show()
+    }
+
+    private fun openHomeSettings() {
+        try { startActivity(Intent(android.provider.Settings.ACTION_HOME_SETTINGS)) } catch (_: Exception) {
+            startActivity(Intent(android.provider.Settings.ACTION_SETTINGS))
+        }
+    }
+
     private val pickCover = registerForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         val key = pendingCover ?: return@registerForActivityResult
         pendingCover = null
@@ -225,6 +308,10 @@ class MainActivity : ComponentActivity(), XmbView.Host {
     }
 
     private fun launch(a: AppEntry) {
+        if (a.kind == AppEntry.KIND_PINNED) {
+            if (Shortcuts.startPinned(this, a)) { a.lastUsed = System.currentTimeMillis(); store.save() }
+            return
+        }
         val intent = store.launchIntent(a)
         if (intent == null) {
             Toast.makeText(this, "No se puede abrir ${store.label(a)}", Toast.LENGTH_SHORT).show()
@@ -308,9 +395,9 @@ class MainActivity : ComponentActivity(), XmbView.Host {
     }
 
     private fun openPicker() {
-        AppPickerDialog.show(this, store) { all, selected ->
-            // Quita las desmarcadas.
-            store.apps.filter { AppPickerDialog.key(it.pkg, it.activity) !in selected }.forEach { store.removeApp(it) }
+        AppPickerDialog.show(this, store, onShortcut = { openShortcutMenu() }) { all, selected ->
+            // Quita las desmarcadas (los accesos directos no aparecen en esta lista: se conservan).
+            store.apps.filter { !it.isShortcut && AppPickerDialog.key(it.pkg, it.activity) !in selected }.forEach { store.removeApp(it) }
             // Añade las nuevas al final (y a la categoría abierta, si hay una).
             val present = store.apps.map { AppPickerDialog.key(it.pkg, it.activity) }.toSet()
             var last: AppEntry? = null
@@ -589,12 +676,16 @@ class MainActivity : ComponentActivity(), XmbView.Host {
             val pct = (prefs.getFloat(KEY_RIN_SCALE, 1f) * 100).toInt()
             return listOf(
                 XmbView.Item("apps", "Añadir o quitar apps", "Elige qué apps aparecen en el launcher", glyph = XmbView.Icon.PACKAGE),
+                XmbView.Item("shortcut", "Añadir acceso directo", "Un juego de un emulador, u otro acceso directo", glyph = XmbView.Icon.GAMEPAD),
                 XmbView.Item("newcat", "Nueva categoría", "Agrupa tus apps como quieras", glyph = XmbView.Icon.FOLDER_PLUS),
                 XmbView.Item("editcats", "Editar categorías", "Renombrar, ordenar o eliminar", glyph = XmbView.Icon.WRENCH),
                 XmbView.Item("rinsize", "Tamaño de Rin", "Actual: $pct %", glyph = XmbView.Icon.FACE),
                 if (sounds.enabled) XmbView.Item("sounds", "Sonidos del menú", "Activados · pulsa para silenciar", glyph = XmbView.Icon.SOUND)
                 else XmbView.Item("sounds", "Sonidos del menú", "Desactivados · pulsa para activar", glyph = XmbView.Icon.MUTE),
-                XmbView.Item("carousel", "Cambiar a vista carrusel", "Tarjetas grandes con carátulas", glyph = XmbView.Icon.DISPLAY)
+                XmbView.Item("carousel", "Cambiar a vista carrusel", "Tarjetas grandes con carátulas", glyph = XmbView.Icon.DISPLAY),
+                XmbView.Item("home", "Usar como launcher predeterminado",
+                    if (Shortcuts.isDefaultLauncher(this)) "Activo · accesos directos de emuladores habilitados"
+                    else "Opcional · necesario para «Añadir a inicio» de los emuladores", glyph = XmbView.Icon.ALL)
             )
         }
         val id = category.key.removePrefix("cat:")
@@ -607,6 +698,8 @@ class MainActivity : ComponentActivity(), XmbView.Host {
         (item.payload as? AppEntry)?.let { launch(it); return }
         when (item.key) {
             "apps" -> openPicker()
+            "shortcut" -> openShortcutMenu()
+            "home" -> openHomeSettings()
             "newcat" -> addCategory()
             "editcats" -> chooseCategoryToEdit()
             "rinsize" -> openRinSizeDialog()
