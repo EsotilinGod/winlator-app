@@ -5,8 +5,10 @@ Es una app aparte: no reemplaza la pantalla de inicio del teléfono.
 
 ## Qué incluye (v1.0)
 - **Pantalla horizontal a pantalla completa** (gira según el sensor entre ambas orientaciones horizontales).
-- **Fondo de circuitos dorados** generados, con una corriente de luz periódica (cada 6 s) que nace del
-  lado de Rin, y partículas tenues.
+- **Fondo original del fondo de pantalla, en horizontal** (v1.4): la ilustración sin Rin (reconstruida
+  con el modelo LaMa) y traspuesta a 2712 × 1220, la pantalla del Xiaomi 14T, sin reescalar. Sus
+  circuitos brillan tenuemente y, en Android 13+, una corriente de luz nace de Rin cada 6 s y recorre
+  las pistas (mismo shader AGSL que el fondo animado). Lo genera `tools/make_launcher_bg.py`.
 - **Rin grande a la derecha, detrás del carrusel** (v1.3), a todo color y recortada sin fondo sobre
   los circuitos, con un halo dorado suave. Respira suavemente (ciclo de 4,2 s) y mantiene la brisa del
   fondo animado (lazo, mechón, pañuelo y correa). El carrusel termina antes de su cara.
@@ -28,14 +30,14 @@ Es una app aparte: no reemplaza la pantalla de inicio del teléfono.
 ## Consumo
 - La animación corre a ~30 FPS solo mientras el launcher está en primer plano; al abrir un juego se
   detiene por completo.
-- La parte estática del fondo se dibuja una sola vez en un bitmap.
+- El fondo es una imagen fija; la corriente se calcula en la GPU con un solo dibujo por fotograma.
 - No pide permisos: la lista de apps se obtiene con `<queries>` (Android 11+) y las carátulas con el
   selector de fotos del sistema.
 
 ## Estructura
 - `MainActivity.kt`: pantalla, carrusel, pestañas, menús y barra de estado.
 - `LauncherStore.kt`: datos (apps, nombres, carátulas, categorías) en `files/launcher.json`.
-- `CircuitBackgroundView.kt`: fondo de circuitos y corriente de luz.
+- `CircuitBackgroundView.kt` + `CircuitCurrent.kt`: fondo original, brillo de circuitos y corriente de luz.
 - `RinPanelView.kt` + `BreezeMesh.kt`: Rin con respiración y brisa (opción holograma) (`assets/rin_static.png`, `assets/breeze_layer.png`).
 - `CarouselAdapter.kt`, `AppPickerDialog.kt`, `BatteryView.kt`.
 - `src/test/.../ScreenshotTest.kt`: prueba con Robolectric que abre la pantalla con apps de ejemplo,
