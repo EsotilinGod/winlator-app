@@ -27,6 +27,13 @@ Estilo consola tipo XrossMediaBar sobre la escena de Rin (`XmbView.kt`): fila ho
 - Ajustes: añadir/quitar apps, nueva categoría, editar categorías, tamaño de Rin y cambiar a la vista
   carrusel. Desde el carrusel, el botón con barras vuelve al XMB.
 
+## Sonidos propios (v2.4)
+- Cursor (`res/raw/xmb_cursor.ogg`) y encendido (`res/raw/xmb_boot.ogg`): creaciones del usuario,
+  convertidos a OGG con +11 dB y +13 dB (picos ≈ −10 dB y −8 dB).
+- El cursor suena al moverse entre apps y, un poco más grave (velocidad 0,9), al cambiar de categoría.
+- El encendido suena al arrancar el launcher (no al volver de una app) y se corta si abres algo antes.
+  Ajustes → Sonido de inicio lo activa o desactiva.
+
 ## Accesos directos (v2.3)
 Ajustes → Añadir acceso directo (o el botón «Acceso directo…» en la lista de apps):
 - **Juego desde archivo**: eliges el emulador y el archivo del juego; el launcher lo abre con

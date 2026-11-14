@@ -48,6 +48,7 @@ class MainActivity : ComponentActivity(), XmbView.Host {
         const val VIEW_XMB = "xmb"
         const val VIEW_CAROUSEL = "carousel"
         private const val KEY_SOUNDS = "menu_sounds"
+        private const val KEY_BOOT_SOUND = "boot_sound"
     }
 
     private lateinit var store: LauncherStore
@@ -201,6 +202,8 @@ class MainActivity : ComponentActivity(), XmbView.Host {
         xmb.host = this
         sounds = MenuSounds(this).apply { enabled = prefs.getBoolean(KEY_SOUNDS, true) }
         xmb.onSound = { sounds.play(it) }
+        // Sonido de encendido: solo al arrancar el launcher (no al volver de un juego).
+        if (savedInstanceState == null && animationsEnabled && prefs.getBoolean(KEY_BOOT_SOUND, true)) playBootSound()
         scene.rinScale = prefs.getFloat(KEY_RIN_SCALE, 1f)
         carousel = findViewById(R.id.carousel)
         tabs = findViewById(R.id.tabs)
@@ -624,6 +627,7 @@ class MainActivity : ComponentActivity(), XmbView.Host {
 
     override fun onPause() {
         super.onPause()
+        stopBootSound()
         animating = false
         Choreographer.getInstance().removeFrameCallback(frameCallback)
         unregisterReceiver(clockReceiver)
@@ -682,6 +686,8 @@ class MainActivity : ComponentActivity(), XmbView.Host {
                 XmbView.Item("rinsize", "Tamaño de Rin", "Actual: $pct %", glyph = XmbView.Icon.FACE),
                 if (sounds.enabled) XmbView.Item("sounds", "Sonidos del menú", "Activados · pulsa para silenciar", glyph = XmbView.Icon.SOUND)
                 else XmbView.Item("sounds", "Sonidos del menú", "Desactivados · pulsa para activar", glyph = XmbView.Icon.MUTE),
+                if (prefs.getBoolean(KEY_BOOT_SOUND, true)) XmbView.Item("bootsound", "Sonido de inicio", "Activado · pulsa para desactivar", glyph = XmbView.Icon.SOUND)
+                else XmbView.Item("bootsound", "Sonido de inicio", "Desactivado · pulsa para activar", glyph = XmbView.Icon.MUTE),
                 XmbView.Item("carousel", "Cambiar a vista carrusel", "Tarjetas grandes con carátulas", glyph = XmbView.Icon.DISPLAY),
                 XmbView.Item("home", "Usar como launcher predeterminado",
                     if (Shortcuts.isDefaultLauncher(this)) "Activo · accesos directos de emuladores habilitados"
@@ -699,6 +705,12 @@ class MainActivity : ComponentActivity(), XmbView.Host {
         when (item.key) {
             "apps" -> openPicker()
             "shortcut" -> openShortcutMenu()
+            "bootsound" -> {
+                val on = !prefs.getBoolean(KEY_BOOT_SOUND, true)
+                prefs.edit().putBoolean(KEY_BOOT_SOUND, on).apply()
+                if (on) { stopBootSound(); playBootSound() } else stopBootSound()
+                xmb.reload()
+            }
             "home" -> openHomeSettings()
             "newcat" -> addCategory()
             "editcats" -> chooseCategoryToEdit()
@@ -873,6 +885,23 @@ class MainActivity : ComponentActivity(), XmbView.Host {
     override fun onDestroy() {
         super.onDestroy()
         sounds.release()
+        stopBootSound()
+    }
+
+    private var bootPlayer: android.media.MediaPlayer? = null
+
+    private fun playBootSound() {
+        bootPlayer = try {
+            android.media.MediaPlayer.create(this, R.raw.xmb_boot)?.apply {
+                setOnCompletionListener { stopBootSound() }
+                start()
+            }
+        } catch (_: Exception) { null }
+    }
+
+    private fun stopBootSound() {
+        bootPlayer?.let { try { it.stop() } catch (_: Exception) {}; it.release() }
+        bootPlayer = null
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {

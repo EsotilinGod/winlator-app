@@ -63,15 +63,8 @@ def save(name, y, peak_db=-6.0):
     print(name, f"{len(y) / SR * 1000:.0f} ms")
 
 
-# Moverse entre elementos: "tic" agudo y cristalino, muy corto.
-T = 0.14
-y = tone([(2350, 1.0), (3520, 0.35), (4700, 0.12)], T, 0.016, total=T) + 0.35 * click(2.5, 5000, T)
-save("xmb_nav", reverb(y, 0.18), -10)
-
-# Cambiar de categoría: algo más grave y con más cuerpo.
-T = 0.2
-y = tone([(1480, 1.0), (2220, 0.45), (2960, 0.15)], T, 0.028, total=T) + 0.3 * click(4, 3000, T)
-save("xmb_cat", reverb(y, 0.22), -9)
+# Moverse y cambiar de categoría: usan el cursor creado por el usuario (res/raw/xmb_cursor.ogg),
+# y el arranque, su sonido de encendido (res/raw/xmb_boot.ogg). Aquí solo se generan abrir y opciones.
 
 # Abrir / confirmar: campana de dos notas (Mi6 y Si6) con parciales inarmónicos tipo campana.
 T = 0.75
