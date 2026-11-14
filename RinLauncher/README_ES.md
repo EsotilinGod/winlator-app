@@ -27,6 +27,12 @@ Es una app aparte: no reemplaza la pantalla de inicio del teléfono.
 - **Barra de estado propia**: hora, fecha, batería (nivel, icono y si está cargando) y temperatura de
   la batería, que cambia a naranja desde 39 °C y a rojo desde 43 °C.
 
+## Con el fondo animado de Rin (v1.5)
+El launcher muestra el fondo de pantalla del sistema detrás. Si el fondo activo es **Rin Live
+Wallpaper**, el launcher no dibuja fondo ni Rin propios: se ve el fondo animado (que tiene modo
+horizontal), con Rin completa, sin recortes, y el carrusel termina antes de su cara. Con cualquier otro
+fondo de pantalla, el launcher usa su fondo interno (descrito arriba).
+
 ## Consumo
 - La animación corre a ~30 FPS solo mientras el launcher está en primer plano; al abrir un juego se
   detiene por completo.

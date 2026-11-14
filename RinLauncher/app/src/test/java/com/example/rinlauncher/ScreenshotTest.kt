@@ -84,9 +84,20 @@ class ScreenshotTest {
     }
 
     @Test
-    fun mainScreen() {
+    fun mainScreen() = capture("main.png", null)
+
+    /** Con el fondo animado de Rin activo: launcher transparente sobre un fotograma del fondo. */
+    @Test
+    fun overRinWallpaper() {
+        val frame = File("../../RinLiveWallpaper/app/build/screenshots/horizontal.png")
+        if (!frame.exists()) return // se genera con la prueba RenderTest del fondo animado
+        capture("over_wallpaper.png", android.graphics.BitmapFactory.decodeFile(frame.path))
+    }
+
+    private fun capture(name: String, wallpaper: Bitmap?) {
         installFakeApps()
         MainActivity.animationsEnabled = false
+        MainActivity.forceRinWallpaper = wallpaper != null
         val activity = Robolectric.buildActivity(MainActivity::class.java).setup().get()
         repeat(5) { shadowOf(Looper.getMainLooper()).idle() }
 
@@ -114,9 +125,11 @@ class ScreenshotTest {
             android.view.View.MeasureSpec.makeMeasureSpec(root.height, android.view.View.MeasureSpec.EXACTLY))
         root.layout(0, 0, root.width, root.height)
         val bmp = Bitmap.createBitmap(root.width, root.height, Bitmap.Config.ARGB_8888)
-        root.draw(Canvas(bmp))
+        val c = Canvas(bmp)
+        wallpaper?.let { c.drawBitmap(it, null, android.graphics.Rect(0, 0, root.width, root.height), null) }
+        root.draw(c)
         val out = File("build/screenshots").apply { mkdirs() }
-        File(out, "main.png").outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        File(out, name).outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
         assertEquals(2712, root.width)
     }
 }

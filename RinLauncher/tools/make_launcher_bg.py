@@ -14,6 +14,9 @@ circuit_flow.png (R = byte alto, G = byte bajo de la distancia, B = válido; med
 
 Requiere: torch, opencv-python-headless, numpy, pillow y el modelo big-lama.pt (TorchScript).
 Uso: python tools/make_launcher_bg.py app/src/main/assets tools/source <big-lama.pt> [preview_dir]
+Variables opcionales: RIN_SIZE, RIN_CENTER_X (colocación de Rin) y EXCLUDE_X="x0,x1".
+Para el fondo animado en horizontal (ilustración 1:1 en una columna):
+  RIN_SIZE=1.7705 RIN_CENTER_X=0.72 EXCLUDE_X=1503,2403
 """
 import heapq
 import sys
@@ -27,7 +30,12 @@ PREVIEW = sys.argv[4] if len(sys.argv) > 4 else None
 # Colocación de Rin en pantalla (debe coincidir con RinPanelView: SIZE, CENTER_X, RIBBON_TOP).
 SCREEN_W, SCREEN_H = 2712, 1220
 CROP_X, CROP_Y, CROP_W, CROP_H = 40, 440, 1140, 2160
-SIZE, CENTER_X, RIBBON_TOP = 1.45, 0.76, 75
+import os
+SIZE = float(os.environ.get("RIN_SIZE", "1.45"))
+CENTER_X = float(os.environ.get("RIN_CENTER_X", "0.76"))
+RIBBON_TOP = 75
+# Opcional: franja de pantalla "x0,x1" donde no se extraen circuitos (la cubre otra capa).
+EXCLUDE = [int(v) for v in os.environ["EXCLUDE_X"].split(",")] if "EXCLUDE_X" in os.environ else None
 
 img = cv2.imread(f"{SRC}/rin_wallpaper.jpg")
 H, W = img.shape[:2]
@@ -93,13 +101,16 @@ ys0, ys1 = max(top, 0), min(top + fh, SCREEN_H)
 xs0, xs1 = max(left, 0), min(left + fw, SCREEN_W)
 sil[ys0:ys1, xs0:xs1] = fig[ys0 - top:ys1 - top, xs0 - left:xs1 - left]
 sil = cv2.dilate((sil > 20).astype(np.uint8) * 255, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (31, 31)))
+excl = sil.copy()
+if EXCLUDE:
+    excl[:, EXCLUDE[0]:EXCLUDE[1]] = 255
 
 hsv = cv2.cvtColor(land, cv2.COLOR_BGR2HSV).astype(np.float32)
 hh_, ss_, vv_ = hsv[..., 0], hsv[..., 1] / 255, hsv[..., 2] / 255
 bgr = land.astype(np.float32) / 255
 b_, g_, r_ = bgr[..., 0], bgr[..., 1], bgr[..., 2]
 ratio = (g_ - b_) / (r_ - b_ + 1e-6)
-gold = (ss_ > 0.4) & (vv_ > 0.75) & (r_ >= g_) & (g_ > b_) & (ratio > 0.35) & (ratio < 0.95) & (sil == 0)
+gold = (ss_ > 0.4) & (vv_ > 0.75) & (r_ >= g_) & (g_ > b_) & (ratio > 0.35) & (ratio < 0.95) & (excl == 0)
 m = gold.astype(np.uint8) * 255
 m = cv2.dilate(cv2.erode(m, np.ones((5, 5), np.uint8)), np.ones((5, 5), np.uint8))
 

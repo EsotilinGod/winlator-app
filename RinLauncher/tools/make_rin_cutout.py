@@ -67,7 +67,7 @@ pieces = np.zeros((H, W), np.uint8)
 pieces[LY:LY + layer.shape[0], LX:LX + layer.shape[1]] = layer
 pieces = cv2.dilate((pieces > 0).astype(np.uint8) * 255, np.ones((5, 5), np.uint8))
 BODY = [  # cabeza (sin lazo ni mechón), torso, brazo derecho, short y piernas
-    (0.452, 0.318), (0.490, 0.303), (0.560, 0.300), (0.645, 0.330), (0.640, 0.385), (0.689, 0.442), (0.707, 0.456),
+    (0.452, 0.318), (0.472, 0.290), (0.505, 0.272), (0.535, 0.288), (0.560, 0.300), (0.645, 0.330), (0.640, 0.385), (0.689, 0.442), (0.707, 0.456),
     (0.742, 0.476), (0.820, 0.494), (0.873, 0.505), (0.910, 0.515), (0.885, 0.525), (0.852, 0.533),
     (0.820, 0.538), (0.738, 0.526), (0.680, 0.500), (0.648, 0.474), (0.655, 0.505), (0.700, 0.515),
     (0.725, 0.560),
@@ -101,11 +101,47 @@ fg[halo] = 0
 fg = cv2.morphologyEx(fg, cv2.MORPH_OPEN, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5)))
 alpha = cv2.GaussianBlur(fg, (3, 3), 0)
 
+def defringe(alpha_in, bgr, band):
+    """Quita, desde el exterior y como máximo `band` px hacia dentro, los píxeles que son resplandor
+    blanco del dibujo (blanco/gris neutro) o restos de circuito (dorado brillante). El contorno oscuro
+    del dibujo detiene el avance, así que piel y ropa no se tocan."""
+    hsv2 = cv2.cvtColor(bgr, cv2.COLOR_BGR2HSV)
+    hu, sa, va = hsv2[..., 0], hsv2[..., 1], hsv2[..., 2]
+    whiteish = (sa < 28) & (va > 200)
+    goldish = (hu >= 14) & (hu <= 30) & (sa > 110) & (va > 215)
+    cand = ((whiteish | goldish) & (alpha_in > 0)).astype(np.uint8)
+    grow = (alpha_in < 128).astype(np.uint8)
+    k = np.ones((3, 3), np.uint8)
+    for _ in range(band):
+        grow = cv2.bitwise_or(grow, cv2.bitwise_and(cv2.dilate(grow, k), cand))
+    out = alpha_in.copy()
+    out[(grow > 0) & (alpha_in >= 128)] = 0
+    # Motas sueltas que quedaron aisladas.
+    n_, lab_, st_, _ = cv2.connectedComponentsWithStats((out > 0).astype(np.uint8), 8)
+    for i in range(1, n_):
+        if st_[i, cv2.CC_STAT_AREA] < 400:
+            out[lab_ == i] = 0
+    # Borde suave de nuevo (sin volver a crecer).
+    soft = cv2.GaussianBlur(out, (3, 3), 0)
+    return soft
+
+
+alpha = defringe(alpha, img_p[y0:y1, x0:x1], 14)
 rgba = cv2.cvtColor(img_p[y0:y1, x0:x1], cv2.COLOR_BGR2BGRA)  # bajo las piezas: cuerpo reconstruido
 rgba[..., 3] = alpha
 rgba[alpha == 0, :3] = 0
 cv2.imwrite(f"{A}/rin_static.png", rgba, [cv2.IMWRITE_PNG_COMPRESSION, 9])
 print("rin_static.png", rgba.shape, "cobertura", round(float((alpha > 0).mean()), 3))
+
+# Capa de piezas con brisa (copia del launcher): mismo desflecado con banda de 8 px.
+lay_rgba = cv2.imread(f"{A}/breeze_layer.png", cv2.IMREAD_UNCHANGED)
+if not hasattr(sys.modules[__name__], "_layer_done"):
+    la_ = lay_rgba[..., 3]
+    orig_bgr = img[LY:LY + la_.shape[0], LX:LX + la_.shape[1]]
+    lay_rgba[..., 3] = defringe(la_, orig_bgr, 8)
+    lay_rgba[lay_rgba[..., 3] == 0, :3] = 0
+    cv2.imwrite(f"{A}/breeze_layer_clean.png", lay_rgba, [cv2.IMWRITE_PNG_COMPRESSION, 9])
+    print("breeze_layer_clean.png", lay_rgba.shape)
 
 if PREVIEW:
     def on(bg):

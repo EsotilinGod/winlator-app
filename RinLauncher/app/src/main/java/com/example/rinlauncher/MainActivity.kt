@@ -1,6 +1,7 @@
 package com.example.rinlauncher
 
 import android.app.AlertDialog
+import android.app.WallpaperManager
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -40,6 +41,9 @@ class MainActivity : ComponentActivity() {
     companion object {
         /** Las pruebas en la JVM lo desactivan: allí el vsync es inmediato y el bucle no cedería. */
         var animationsEnabled = true
+        const val RIN_WALLPAPER_PACKAGE = "com.example.rinlivewallpaper"
+        /** Solo para pruebas: simula que el fondo animado de Rin está activo. */
+        var forceRinWallpaper = false
     }
 
     private lateinit var store: LauncherStore
@@ -61,7 +65,9 @@ class MainActivity : ComponentActivity() {
     private val dp by lazy { resources.displayMetrics.density }
     private var currentCategory: String? = null // null = "Todos"
     private var visibleApps: List<AppEntry> = emptyList()
-    private var pendingCover: String? = null // clave pkg/activity de la app que recibe la carátula
+    private var pendingCover: String? = null
+    /** true si el fondo de pantalla activo es el fondo animado de Rin: se muestra detrás del launcher. */
+    private var usingRinWallpaper = false // clave pkg/activity de la app que recibe la carátula
 
     // --- Animación (fondo y Rin) a ~30 FPS, solo mientras la app está en primer plano ---
     private val startTime = SystemClock.uptimeMillis()
@@ -139,9 +145,11 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun applyLayout() {
-        // Rin (holograma) queda a la derecha; el carrusel termina antes de su cara y se funde con ella.
+        // Rin queda a la derecha; el carrusel termina antes de su cara y se funde con ella.
+        // Con el fondo animado, Rin está centrada en el 72 % del ancho (su cara empieza en ~69 %).
         val content = findViewById<LinearLayout>(R.id.content)
-        val end = (content.width * (1f - rinPanel.contentEndFraction)).toInt()
+        val endFraction = if (usingRinWallpaper) 0.64f else rinPanel.contentEndFraction
+        val end = (content.width * (1f - endFraction)).toInt()
         content.setPadding(content.paddingLeft, content.paddingTop, end, content.paddingBottom)
         content.post {
             adapter.cardHeight = (carousel.height * 0.74f).toInt()
@@ -429,6 +437,18 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         goImmersive()
+        // ¿Está activo el fondo animado de Rin? Entonces el launcher es transparente y se ve detrás.
+        val rinWp = try {
+            WallpaperManager.getInstance(this).wallpaperInfo?.packageName == RIN_WALLPAPER_PACKAGE
+        } catch (_: Exception) { false } || forceRinWallpaper
+        val shownInternal = background.visibility == View.VISIBLE
+        if (rinWp != usingRinWallpaper || shownInternal == rinWp) {
+            usingRinWallpaper = rinWp
+            val v = if (rinWp) View.GONE else View.VISIBLE
+            background.visibility = v
+            rinPanel.visibility = v
+            findViewById<View>(R.id.root).post { applyLayout() }
+        }
         // Las apps desinstaladas desaparecen solas.
         val before = store.apps.size
         store.load()
@@ -441,7 +461,7 @@ class MainActivity : ComponentActivity() {
         }, flags)
         ContextCompat.registerReceiver(this, batteryReceiver, IntentFilter(Intent.ACTION_BATTERY_CHANGED), flags)
             ?.let { updateBattery(it) }
-        if (animationsEnabled) {
+        if (animationsEnabled && !usingRinWallpaper) {
             animating = true
             Choreographer.getInstance().postFrameCallback(frameCallback)
         }

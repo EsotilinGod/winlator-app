@@ -11,8 +11,8 @@ android {
         applicationId 'com.example.rinlivewallpaper'
         minSdk 23
         targetSdk 35
-        versionCode 5
-        versionName '1.4'
+        versionCode 6
+        versionName '1.5'
     }
 
     buildTypes {
@@ -28,5 +28,20 @@ android {
         targetCompatibility JavaVersion.VERSION_17
     }
     kotlinOptions { jvmTarget = "17" }
+
+    testOptions {
+        unitTests.includeAndroidResources = true
+        unitTests.all {
+            if (project.hasProperty('robolectricRepo')) {
+                systemProperty 'robolectric.dependency.repo.url', project.property('robolectricRepo')
+            }
+        }
+    }
     //kotlin { compilerOptions { jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17 } }
+}
+
+dependencies {
+    // Prueba de captura en la JVM (Robolectric, gráficos nativos).
+    testImplementation 'junit:junit:4.13.2'
+    testImplementation 'org.robolectric:robolectric:4.14.1'
 }

@@ -38,6 +38,15 @@ Ambos se generan con `tools/make_circuit_glow.py`.
 
 Algunos trazos muy finos o tapados por Rin no forman parte de la capa.
 
+## Modo horizontal (v1.5)
+Cuando la pantalla está en horizontal (por ejemplo, con Rin Launcher abierto), el fondo muestra la
+ilustración original a escala 1:1 respecto al alto (del lazo a las piernas) en una columna a la derecha
+(centro en el 72 % del ancho). Los lados muestran el fondo original sin Rin, reconstruido con LaMa y
+traspuesto a 2712 × 1220 (`land_bg.jpg`, generado con `RinLauncher/tools/make_launcher_bg.py`), con la
+misma escala de circuitos; los bordes de la columna se funden con él. Brisa, brillo y corriente de luz
+funcionan en ambas partes (`land_glow.png`, `land_flow.png`). Ajustes: constantes `LAND_*` al inicio de
+`RinWallpaperService.kt`. La prueba `RenderTest` renderiza un fotograma en cada orientación.
+
 ## Requisitos para compilar
 - Android Studio actualizado.
 - JDK 17.

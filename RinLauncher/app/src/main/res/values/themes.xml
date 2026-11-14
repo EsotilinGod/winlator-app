@@ -1,6 +1,8 @@
 <resources>
     <style name="Theme.RinLauncher" parent="android:Theme.Material.Light.NoActionBar">
-        <item name="android:windowBackground">@color/paper</item>
+        <!-- Muestra el fondo de pantalla del sistema detrás (el fondo animado de Rin, si está activo). -->
+        <item name="android:windowShowWallpaper">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
         <item name="android:colorAccent">@color/gold_dark</item>
         <item name="android:colorPrimary">@color/gold</item>
         <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
