@@ -7,12 +7,13 @@ Es una app aparte: no reemplaza la pantalla de inicio del teléfono.
 - **Pantalla horizontal a pantalla completa** (gira según el sensor entre ambas orientaciones horizontales).
 - **Fondo de circuitos dorados** generados, con una corriente de luz periódica (cada 6 s) que nace del
   lado de Rin, y partículas tenues.
-- **Rin como holograma dorado** (v1.2), grande y a la derecha, detrás del carrusel: tinte dorado
-  translúcido, líneas de escaneo, una banda de luz que la recorre cada 5 s, halo, desvanecido inferior
-  y un breve parpadeo de interferencia cada ~7 s. Respira suavemente (ciclo de 4,2 s) y mantiene la
-  brisa del fondo animado (lazo, mechón, pañuelo y correa). El carrusel termina antes de su cara.
+- **Rin grande a la derecha, detrás del carrusel** (v1.3), a todo color y recortada sin fondo sobre
+  los circuitos, con un halo dorado suave. Respira suavemente (ciclo de 4,2 s) y mantiene la brisa del
+  fondo animado (lazo, mechón, pañuelo y correa). El carrusel termina antes de su cara.
+  Con `HOLOGRAM = true` en `RinPanelView.kt` se muestra como holograma dorado (tinte, líneas de
+  escaneo, banda de luz e interferencia). Tamaño y posición: `SIZE` y `CENTER_X`.
   El recorte sin fondo se genera con `tools/make_rin_cutout.py` (modelo `isnet-anime` de rembg +
-  limpieza por contorno) a partir de `tools/source/`. Ajustes en `RinPanelView.kt` (`SIZE`, `CENTER_X`).
+  limpieza por contorno) a partir de `tools/source/`.
 - **Carrusel de tarjetas**: la tarjeta central se agranda y tiene borde dorado.
   - Toca una tarjeta lateral para centrarla; toca la central para abrir la app.
   - Mantén pulsada una tarjeta para: cambiar el nombre, elegir carátula de la galería, quitar la
@@ -35,7 +36,7 @@ Es una app aparte: no reemplaza la pantalla de inicio del teléfono.
 - `MainActivity.kt`: pantalla, carrusel, pestañas, menús y barra de estado.
 - `LauncherStore.kt`: datos (apps, nombres, carátulas, categorías) en `files/launcher.json`.
 - `CircuitBackgroundView.kt`: fondo de circuitos y corriente de luz.
-- `RinPanelView.kt` + `BreezeMesh.kt`: holograma de Rin con respiración y brisa (`assets/rin_static.png`, `assets/breeze_layer.png`).
+- `RinPanelView.kt` + `BreezeMesh.kt`: Rin con respiración y brisa (opción holograma) (`assets/rin_static.png`, `assets/breeze_layer.png`).
 - `CarouselAdapter.kt`, `AppPickerDialog.kt`, `BatteryView.kt`.
 - `src/test/.../ScreenshotTest.kt`: prueba con Robolectric que abre la pantalla con apps de ejemplo,
   verifica la carga de datos y guarda una captura en `app/build/screenshots/main.png`.

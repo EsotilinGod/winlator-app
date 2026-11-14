@@ -22,7 +22,8 @@ import kotlin.math.PI
 import kotlin.math.sin
 
 /**
- * Rin como holograma dorado detrás del carrusel.
+ * Rin grande detrás del carrusel. Con [HOLOGRAM] = false (por defecto) se dibuja a todo color con un
+ * halo dorado suave; con true, como holograma dorado.
  *
  * Por fotograma, todo se compone en UNA capa (saveLayer) que al cerrarse aplica la opacidad y el
  * filtro de color del holograma:
@@ -48,6 +49,8 @@ class RinPanelView @JvmOverloads constructor(
         const val BREATH_PERIOD = 4.2f
         const val SWEEP_PERIOD = 5f
         const val GLITCH_PERIOD = 7.3f
+        /** true = holograma dorado (tinte, escaneo, banda de luz, interferencia); false = Rin a todo color. */
+        const val HOLOGRAM = false
     }
 
     private val dp = resources.displayMetrics.density
@@ -63,7 +66,7 @@ class RinPanelView @JvmOverloads constructor(
     private val bounds = RectF()
 
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
-    private val auraPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.argb(110, 255, 190, 50) }
+    private val auraPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = if (HOLOGRAM) Color.argb(110, 255, 190, 50) else Color.argb(75, 255, 190, 50) }
 
     /** Al cerrar la capa: opacidad + tinte dorado (mezcla 50 % dorado por luminancia, 50 % original). */
     private val layerPaint = Paint().apply {
@@ -124,29 +127,11 @@ class RinPanelView @JvmOverloads constructor(
         sweepPaint.shader = sweepShader
     }
 
-    override fun onDraw(canvas: Canvas) {
-        val r = rin ?: return
-        val h = height.toFloat()
+    /** Respiración: dilatación vertical de ±0,6 % con pivote en el borde inferior. */
+    private fun breathAt(t: Float) = 1f + 0.006f * sin(2f * PI.toFloat() * t / BREATH_PERIOD)
 
-        // Interferencia breve: desplazamiento lateral y caída de opacidad durante ~120 ms.
-        val g = (time % GLITCH_PERIOD) / GLITCH_PERIOD
-        val glitch = g < 0.016f
-        val dx = if (glitch) (if (g < 0.008f) 7 else -5) * dp else 0f
-        layerPaint.alpha = if (glitch) 120 else (205 + 12 * sin(time * 2.1f)).toInt()
-
-        // Respiración: dilatación vertical de ±0,6 % con pivote en el borde inferior.
-        val breath = 1f + 0.006f * sin(2f * PI.toFloat() * time / BREATH_PERIOD)
-
-        canvas.save()
-        canvas.translate(dx, 0f)
-        canvas.scale(1f, breath, 0f, h)
-        aura?.let { canvas.drawBitmap(it, left + auraOffset[0], top + auraOffset[1], auraPaint) }
-        canvas.restore()
-
-        val save = canvas.saveLayer(bounds, layerPaint)
-        canvas.save()
-        canvas.translate(dx, 0f)
-        canvas.scale(1f, breath, 0f, h)
+    /** Rin estática + piezas con brisa, en coordenadas de pantalla. */
+    private fun drawFigure(canvas: Canvas, r: Bitmap) {
         canvas.drawBitmap(r, left, top, paint)
         val m = mesh; val l = layer
         if (m != null && l != null) {
@@ -158,6 +143,41 @@ class RinPanelView @JvmOverloads constructor(
             canvas.drawBitmapMesh(l, m.cols, m.rows, m.verts, 0, null, 0, paint)
             canvas.restore()
         }
+    }
+
+    override fun onDraw(canvas: Canvas) {
+        val r = rin ?: return
+        val h = height.toFloat()
+
+        // Interferencia breve: desplazamiento lateral y caída de opacidad durante ~120 ms.
+        val g = (time % GLITCH_PERIOD) / GLITCH_PERIOD
+        val glitch = HOLOGRAM && g < 0.016f
+        val dx = if (glitch) (if (g < 0.008f) 7 else -5) * dp else 0f
+        layerPaint.alpha = if (glitch) 120 else (205 + 12 * sin(time * 2.1f)).toInt()
+        if (!HOLOGRAM) {
+            // A todo color: sin capa intermedia (más barato), solo halo + figura con respiración y brisa.
+            canvas.save()
+            canvas.scale(1f, breathAt(time), 0f, h)
+            aura?.let { canvas.drawBitmap(it, left + auraOffset[0], top + auraOffset[1], auraPaint) }
+            drawFigure(canvas, r)
+            canvas.restore()
+            return
+        }
+
+        // Respiración: dilatación vertical de ±0,6 % con pivote en el borde inferior.
+        val breath = breathAt(time)
+
+        canvas.save()
+        canvas.translate(dx, 0f)
+        canvas.scale(1f, breath, 0f, h)
+        aura?.let { canvas.drawBitmap(it, left + auraOffset[0], top + auraOffset[1], auraPaint) }
+        canvas.restore()
+
+        val save = canvas.saveLayer(bounds, layerPaint)
+        canvas.save()
+        canvas.translate(dx, 0f)
+        canvas.scale(1f, breath, 0f, h)
+        drawFigure(canvas, r)
         canvas.restore()
         // Efectos del holograma, limitados a la figura por los modos de mezcla.
         canvas.drawRect(bounds, scanPaint)
