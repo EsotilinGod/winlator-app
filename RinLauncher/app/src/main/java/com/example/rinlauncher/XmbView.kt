@@ -33,7 +33,23 @@ class XmbView @JvmOverloads constructor(context: Context, attrs: AttributeSet? =
 
     // --- Modelo ---------------------------------------------------------------------------------
 
-    enum class Icon { SETTINGS, ALL, GAMEPAD, CHIP, MEDIA, STAR, FOLDER, PLUS, FOLDER_PLUS, RESIZE, LAYOUT }
+    /** Pack de iconos propio (glifos sólidos estilo consola, 48 × 48, relleno par-impar). */
+    enum class Icon { SETTINGS, ALL, GAMEPAD, CHIP, MEDIA, MUSIC, PHOTO, STAR, FOLDER, GLOBE, PLUS, FOLDER_PLUS, FOLDER_EDIT, RESIZE, LAYOUT, SOUND, MUTE }
+
+    companion object Sounds {
+        const val SOUND_NAV = 0   // moverse entre elementos
+        const val SOUND_CAT = 1   // cambiar de categoría
+        const val SOUND_OK = 2    // abrir / confirmar
+        const val SOUND_OPT = 3   // abrir opciones
+
+        private const val CAT_X = 300f      // centro horizontal de la columna seleccionada
+        private const val CAT_Y = 141f      // centro vertical de la fila de categorías
+        private const val CAT_GAP = 112f
+        private const val SEL_TOP = 228f    // borde superior del elemento seleccionado
+    }
+
+    /** Se llama al navegar para reproducir los sonidos del menú. */
+    var onSound: ((Int) -> Unit)? = null
 
     class Category(val key: String, val name: String, val icon: Icon)
 
@@ -78,9 +94,7 @@ class XmbView @JvmOverloads constructor(context: Context, attrs: AttributeSet? =
     private val veil = Paint()
     private val wavePaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val waveLine = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
-    private val iconPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND; strokeJoin = Paint.Join.ROUND; color = Color.WHITE
-    }
+    private val iconPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL; color = Color.WHITE }
     private val text = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE }
     private val bmpPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
     private val boxPaint = Paint(Paint.ANTI_ALIAS_FLAG)
@@ -95,19 +109,25 @@ class XmbView @JvmOverloads constructor(context: Context, attrs: AttributeSet? =
     init {
         isFocusable = true
         val defs = mapOf(
-            Icon.SETTINGS to "M17,24a7,7 0 1,0 14,0a7,7 0 1,0 -14,0M24 6v6M24 36v6M6 24h6M36 24h6M11.3 11.3l4.2 4.2M32.5 32.5l4.2 4.2M11.3 36.7l4.2-4.2M32.5 15.5l4.2-4.2",
-            Icon.ALL to "M8,8h13v13h-13zM27,8h13v13h-13zM8,27h13v13h-13zM27,27h13v13h-13z",
-            Icon.GAMEPAD to "M14 16h20c5 0 8 4 9 10l1 6c.6 4-3.5 6-6 3.5L33 30H15l-5 5.5C7.5 38 3.4 36 4 32l1-6c1-6 4-10 9-10zM14 21v7M10.5 24.5h7M30.4,22a1.6,1.6 0 1,0 3.2,0a1.6,1.6 0 1,0 -3.2,0M34.4,26a1.6,1.6 0 1,0 3.2,0a1.6,1.6 0 1,0 -3.2,0",
-            Icon.CHIP to "M15,12h18a3,3 0 0 1 3,3v18a3,3 0 0 1 -3,3h-18a3,3 0 0 1 -3,-3v-18a3,3 0 0 1 3,-3zM18,18h12v12h-12zM17 6v6M24 6v6M31 6v6M17 36v6M24 36v6M31 36v6M6 17h6M6 24h6M6 31h6M36 17h6M36 24h6M36 31h6",
-            Icon.MEDIA to "M9,10h30a3,3 0 0 1 3,3v22a3,3 0 0 1 -3,3h-30a3,3 0 0 1 -3,-3v-22a3,3 0 0 1 3,-3zM20 18l10 6-10 6z",
-            Icon.STAR to "M24 6l5.2 11.6L42 19l-9.6 8.6L35 40 24 33.6 13 40l2.6-12.4L6 19l12.8-1.4z",
-            Icon.FOLDER to "M6 13h14l4 4h18v21H6z",
-            Icon.PLUS to "M24 10v28M10 24h28",
-            Icon.FOLDER_PLUS to "M6 13h14l4 4h18v21H6zM24 22v12M18 28h12",
-            Icon.RESIZE to "M28 8h12v12M40 8L27 21M20 40H8V28M8 40l13-13",
-            Icon.LAYOUT to "M8 10h32v28H8zM8 19h32M20 19v19"
+            Icon.SETTINGS to "M18 7h12a3 3 0 0 1 3 3v5h-4v-4H19v4h-4v-5a3 3 0 0 1 3-3zM7 16h34a4 4 0 0 1 4 4v8H28v-2h-8v2H3v-8a4 4 0 0 1 4-4zM3 31h17v3h8v-3h17v10a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4z",
+            Icon.ALL to "M7 6h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2zM29 6h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H29a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2zM7 26h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V28a2 2 0 0 1 2-2zM29 26h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H29a2 2 0 0 1-2-2V28a2 2 0 0 1 2-2z",
+            Icon.GAMEPAD to "M14 12h20c6.5 0 9.5 5 10.6 12.5l1 7.5c.6 4.6-4.6 7.2-7.6 4l-5.4-5.6H15.4L10 36c-3 3.2-8.2.6-7.6-4l1-7.5C4.5 17 7.5 12 14 12zM12.5 18v5h-5v4h5v5h4v-5h5v-4h-5v-5zM33 18.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 1 0 0-5zM38.5 24a2.5 2.5 0 1 0 0 5 2.5 2.5 0 1 0 0-5zM27.5 24a2.5 2.5 0 1 0 0 5 2.5 2.5 0 1 0 0-5zM33 29.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 1 0 0-5z",
+            Icon.CHIP to "M11 4h20l8 8v30a3 3 0 0 1-3 3H11a3 3 0 0 1-3-3V7a3 3 0 0 1 3-3zM14 11v15h20V11zM14 35v6h3v-6zM20 35v6h3v-6zM26 35v6h3v-6zM32 35v6h3v-6z",
+            Icon.MEDIA to "M3 9h42v30H3zM6 12v3h4v-3zM14 12v3h4v-3zM22 12v3h4v-3zM30 12v3h4v-3zM38 12v3h4v-3zM6 33v3h4v-3zM14 33v3h4v-3zM22 33v3h4v-3zM30 33v3h4v-3zM38 33v3h4v-3zM8 18v12h14V18zM26 18v12h14V18z",
+            Icon.MUSIC to "M17 9l25-5v28.5a6.5 6.5 0 1 1-4.5-6.2V12.8l-16 3.2v21.5a6.5 6.5 0 1 1-4.5-6.2z",
+            Icon.PHOTO to "M17 8h14l3 5h7a4 4 0 0 1 4 4v20a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V17a4 4 0 0 1 4-4h7zM24 17a9 9 0 1 0 0 18 9 9 0 1 0 0-18zM24 21a5 5 0 1 1 0 10 5 5 0 1 1 0-10z",
+            Icon.STAR to "M24 4l6 13.2 14.4 1.4-10.9 9.7 3.2 14.2L24 35.1 11.3 42.5l3.2-14.2L3.6 18.6 18 17.2z",
+            Icon.FOLDER to "M3 11a4 4 0 0 1 4-4h12l5 5h17a4 4 0 0 1 4 4v22a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4z",
+            Icon.GLOBE to "M24 3a21 21 0 1 0 0 42 21 21 0 1 0 0-42zM24 7c2.6 2.6 4.6 6.8 5.4 12H18.6C19.4 13.8 21.4 9.6 24 7zM18.3 23h11.4c0 1.4 0 2.6-.1 4H18.4c-.1-1.4-.1-2.6-.1-4zM18.6 31h10.8c-.8 4.4-2.8 8.2-5.4 10.4-2.6-2.2-4.6-6-5.4-10.4zM14.6 19H8a17 17 0 0 1 9.4-10.6c-1.4 2.8-2.4 6.6-2.8 10.6zM33.4 19c-.4-4-1.4-7.8-2.8-10.6A17 17 0 0 1 40 19zM7.2 23h7.1c0 1.4 0 2.6.1 4H7.2a17 17 0 0 1 0-4zM33.7 23h7.1a17 17 0 0 1 0 4h-7.2c.1-1.4.1-2.6.1-4zM8 31h6.6c.5 3.8 1.5 7.2 2.9 9.6A17 17 0 0 1 8 31zM33.4 31H40a17 17 0 0 1-9.5 9.6c1.4-2.4 2.4-5.8 2.9-9.6z",
+            Icon.PLUS to "M9 5h30a4 4 0 0 1 4 4v30a4 4 0 0 1-4 4H9a4 4 0 0 1-4-4V9a4 4 0 0 1 4-4zM21.5 13v8.5H13v5h8.5V35h5v-8.5H35v-5h-8.5V13z",
+            Icon.FOLDER_PLUS to "M3 11a4 4 0 0 1 4-4h12l5 5h17a4 4 0 0 1 4 4v22a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4zM22 19v6h-6v4h6v6h4v-6h6v-4h-6v-6z",
+            Icon.FOLDER_EDIT to "M3 11a4 4 0 0 1 4-4h12l5 5h17a4 4 0 0 1 4 4v22a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4zM30.5 18.5l4 4-11 11-5.5 1.5 1.5-5.5z",
+            Icon.RESIZE to "M27 5h16v16l-6-6-7 7-4-4 7-7zM21 43H5V27l6 6 7-7 4 4-7 7z",
+            Icon.LAYOUT to "M3 7h42v8H3zM3 19h12v22H3zM19 19h26v9H19zM19 32h26v9H19z",
+            Icon.SOUND to "M5 17h8l11-9v32l-11-9H5zM29.5 15.5l3-3a16 16 0 0 1 0 23l-3-3a11.7 11.7 0 0 0 0-17zM35 10l3-3a23.5 23.5 0 0 1 0 34l-3-3a19.2 19.2 0 0 0 0-28z",
+            Icon.MUTE to "M5 17h8l11-9v32l-11-9H5zM30 18l3-3 5 5 5-5 3 3-5 5 5 5-3 3-5-5-5 5-3-3 5-5z"
         )
-        for ((k, v) in defs) iconPaths[k] = PathParser.createPathFromPathData(v)
+        for ((k, v) in defs) iconPaths[k] = PathParser.createPathFromPathData(v).apply { fillType = Path.FillType.EVEN_ODD }
     }
 
     // --- API ------------------------------------------------------------------------------------
@@ -151,6 +171,7 @@ class XmbView @JvmOverloads constructor(context: Context, attrs: AttributeSet? =
         val n = i.coerceIn(0, maxOf(0, cats.size - 1))
         if (n == catSel) return
         catSel = n
+        onSound?.invoke(SOUND_CAT)
         itemPos = selItem().toFloat() // la lista de la nueva categoría aparece en su posición
         lastCatKey = cats[n].key
         host?.xmbCategoryChanged(cats[n])
@@ -160,6 +181,7 @@ class XmbView @JvmOverloads constructor(context: Context, attrs: AttributeSet? =
     private fun setItem(i: Int) {
         val c = currentCat() ?: return
         val n = i.coerceIn(0, maxOf(0, currentItems().size - 1))
+        if (n != itemSel[c.key]) onSound?.invoke(SOUND_NAV)
         itemSel[c.key] = n
         invalidate()
     }
@@ -169,12 +191,12 @@ class XmbView @JvmOverloads constructor(context: Context, attrs: AttributeSet? =
 
     fun activate() {
         val c = currentCat() ?: return
-        currentItems().getOrNull(selItem())?.let { host?.xmbActivate(c, it) }
+        currentItems().getOrNull(selItem())?.let { onSound?.invoke(SOUND_OK); host?.xmbActivate(c, it) }
     }
 
     fun options() {
         val c = currentCat() ?: return
-        currentItems().getOrNull(selItem())?.let { host?.xmbOptions(c, it) }
+        currentItems().getOrNull(selItem())?.let { if (it.payload != null) onSound?.invoke(SOUND_OPT); host?.xmbOptions(c, it) }
     }
 
     /** Mando/teclado. Devuelve true si la tecla se usó. */
@@ -246,12 +268,6 @@ class XmbView @JvmOverloads constructor(context: Context, attrs: AttributeSet? =
 
     // --- Dibujo ---------------------------------------------------------------------------------
 
-    private companion object {
-        const val CAT_X = 300f      // centro horizontal de la columna seleccionada
-        const val CAT_Y = 141f      // centro vertical de la fila de categorías
-        const val CAT_GAP = 112f
-        const val SEL_TOP = 228f    // borde superior del elemento seleccionado
-    }
 
     /** Posición vertical (top) y tamaño del icono para un elemento a distancia d del seleccionado. */
     private fun itemGeom(d: Float): Pair<Float, Float> {
@@ -324,7 +340,6 @@ class XmbView @JvmOverloads constructor(context: Context, attrs: AttributeSet? =
         canvas.save()
         canvas.translate(cx - size / 2, cy - size / 2)
         canvas.scale(size / 48f, size / 48f)
-        iconPaint.strokeWidth = 2.6f
         iconPaint.alpha = alpha
         iconPaint.setShadowLayer(if (glow) 6f else 2f, 0f, if (glow) 0f else 0.6f,
             if (glow) Color.argb(220, 255, 220, 140) else Color.argb(110, 0, 0, 0))
@@ -371,23 +386,27 @@ class XmbView @JvmOverloads constructor(context: Context, attrs: AttributeSet? =
                 sh.setLocalMatrix(m)
                 bmpPaint.shader = sh; bmpPaint.alpha = alpha
                 canvas.drawRoundRect(rect, r, r, bmpPaint)
+            } else if (it.glyph != null) {
+                // Elementos de Ajustes: solo el glifo, sin caja ni borde (como en el XMB).
+                drawIcon(canvas, it.glyph, left + size / 2, top + size / 2, size * 0.78f, alpha, sel)
             } else {
                 m.setScale(size, size); m.postTranslate(left, top)
                 boxShader.setLocalMatrix(m)
                 boxPaint.shader = boxShader; boxPaint.alpha = alpha
                 canvas.drawRoundRect(rect, r, r, boxPaint)
                 boxPaint.shader = null
-                it.glyph?.let { g -> drawIcon(canvas, g, left + size / 2, top + size / 2, size * 0.62f, alpha, false) }
             }
-            // Borde: dorado con brillo si está seleccionado.
-            if (sel) {
+            // Borde: dorado con brillo si está seleccionado (no en los glifos de Ajustes).
+            if (it.bitmap == null && it.glyph != null) {
+                // sin borde
+            } else if (sel) {
                 strokePaint.strokeWidth = 2.5f * u; strokePaint.color = Color.rgb(255, 215, 106)
                 strokePaint.setShadowLayer(11f * u, 0f, 0f, Color.argb(215, 255, 210, 110))
             } else {
                 strokePaint.strokeWidth = 1.5f * u; strokePaint.color = Color.argb(alpha * 90 / 255, 255, 255, 255)
                 strokePaint.clearShadowLayer()
             }
-            canvas.drawRoundRect(rect, r, r, strokePaint)
+            if (!(it.bitmap == null && it.glyph != null)) canvas.drawRoundRect(rect, r, r, strokePaint)
             // Texto.
             val tx = left + size + 16 * u
             text.typeface = if (sel) Typeface.DEFAULT_BOLD else Typeface.DEFAULT

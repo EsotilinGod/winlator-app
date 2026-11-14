@@ -27,6 +27,16 @@ Estilo consola tipo XrossMediaBar sobre la escena de Rin (`XmbView.kt`): fila ho
 - Ajustes: añadir/quitar apps, nueva categoría, editar categorías, tamaño de Rin y cambiar a la vista
   carrusel. Desde el carrusel, el botón con barras vuelve al XMB.
 
+## Iconos y sonidos del menú (v2.1)
+- Pack de iconos propio en estilo consola (glifos blancos sólidos con brillo), en `XmbView.kt`. Las
+  categorías eligen icono según su nombre: juegos → mando, emuladores/retro → cartucho, música → nota,
+  fotos → cámara, internet/web → globo, vídeo/películas → película, favoritos → estrella; el resto,
+  carpeta.
+- Sonidos originales sintetizados (`tools/make_sounds.py` → `res/raw/xmb_*.wav`): moverse, cambiar de
+  categoría, abrir y opciones. Se reproducen con `SoundPool` (`MenuSounds.kt`) con el volumen
+  multimedia y se activan/desactivan en Ajustes → Sonidos del menú.
+- No se usan iconos ni sonidos de Sony: solo el estilo general.
+
 ## Escena de Rin (v1.7)
 El launcher dibuja él mismo la escena horizontal del fondo animado (`RinSceneView.kt`): la ilustración
 original completa (sin recortes) en una columna a la derecha, fundida con el fondo original sin Rin

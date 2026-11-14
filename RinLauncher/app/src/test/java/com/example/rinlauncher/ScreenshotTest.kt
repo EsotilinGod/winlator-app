@@ -134,6 +134,11 @@ class ScreenshotTest {
     @Test
     fun xmbScreen() = capture("xmb.png", null, 1f, MainActivity.VIEW_XMB)
 
+    /** XMB en Ajustes: iconos del pack y el interruptor de sonidos. */
+    @Test
+    fun xmbSettings() = capture("xmb_ajustes.png", null, 1f, MainActivity.VIEW_XMB,
+        listOf(android.view.KeyEvent.KEYCODE_DPAD_LEFT, android.view.KeyEvent.KEYCODE_DPAD_DOWN, android.view.KeyEvent.KEYCODE_DPAD_DOWN))
+
     /** XMB con mando: ◀ ▶ categorías, ▲ ▼ apps, A abre. */
     @Test
     fun xmbGamepad() {
@@ -167,7 +172,8 @@ class ScreenshotTest {
     @Test
     fun smallRin() = capture("rin_45.png", null, 0.45f)
 
-    private fun capture(name: String, wallpaper: Bitmap?, rinScale: Float = 1f, view: String = MainActivity.VIEW_CAROUSEL) {
+    private fun capture(name: String, wallpaper: Bitmap?, rinScale: Float = 1f, view: String = MainActivity.VIEW_CAROUSEL,
+                        keys: List<Int> = listOf(android.view.KeyEvent.KEYCODE_DPAD_RIGHT, android.view.KeyEvent.KEYCODE_DPAD_DOWN)) {
         installFakeApps()
         useView(view)
         MainActivity.animationsEnabled = false
@@ -183,7 +189,7 @@ class ScreenshotTest {
         activity.findViewById<RinSceneView>(R.id.scene).apply { setTime(1.6f); this.rinScale = rinScale }
         if (view == MainActivity.VIEW_XMB) {
             val xmb = activity.findViewById<XmbView>(R.id.xmb)
-            for (code in listOf(android.view.KeyEvent.KEYCODE_DPAD_RIGHT, android.view.KeyEvent.KEYCODE_DPAD_DOWN))
+            for (code in keys)
                 for (action in listOf(android.view.KeyEvent.ACTION_DOWN, android.view.KeyEvent.ACTION_UP))
                     activity.dispatchKeyEvent(android.view.KeyEvent(action, code))
             repeat(40) { xmb.setTime(2.0f) } // deja terminar la animación de deslizamiento

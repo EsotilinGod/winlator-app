@@ -47,6 +47,7 @@ class MainActivity : ComponentActivity(), XmbView.Host {
         const val KEY_VIEW = "view"
         const val VIEW_XMB = "xmb"
         const val VIEW_CAROUSEL = "carousel"
+        private const val KEY_SOUNDS = "menu_sounds"
     }
 
     private lateinit var store: LauncherStore
@@ -55,6 +56,7 @@ class MainActivity : ComponentActivity(), XmbView.Host {
     private lateinit var layoutManager: LinearLayoutManager
     private lateinit var scene: RinSceneView
     private lateinit var xmb: XmbView
+    private lateinit var sounds: MenuSounds
     /** Vista activa: estilo XMB (por defecto) o carrusel de tarjetas. */
     private val xmbMode get() = prefs.getString(KEY_VIEW, VIEW_XMB) == VIEW_XMB
     private lateinit var tabs: LinearLayout
@@ -114,6 +116,8 @@ class MainActivity : ComponentActivity(), XmbView.Host {
         scene = findViewById(R.id.scene)
         xmb = findViewById(R.id.xmb)
         xmb.host = this
+        sounds = MenuSounds(this).apply { enabled = prefs.getBoolean(KEY_SOUNDS, true) }
+        xmb.onSound = { sounds.play(it) }
         scene.rinScale = prefs.getFloat(KEY_RIN_SCALE, 1f)
         carousel = findViewById(R.id.carousel)
         tabs = findViewById(R.id.tabs)
@@ -216,6 +220,7 @@ class MainActivity : ComponentActivity(), XmbView.Host {
             }
             return
         }
+        sounds.play(XmbView.SOUND_OK)
         launch(visibleApps[position])
     }
 
@@ -558,8 +563,11 @@ class MainActivity : ComponentActivity(), XmbView.Host {
         val n = name.lowercase(Locale("es"))
         return when {
             "jueg" in n || "game" in n -> XmbView.Icon.GAMEPAD
-            "emul" in n || "retro" in n -> XmbView.Icon.CHIP
-            "multi" in n || "vídeo" in n || "video" in n || "músic" in n || "music" in n || "pelí" in n -> XmbView.Icon.MEDIA
+            "emul" in n || "retro" in n || "consola" in n -> XmbView.Icon.CHIP
+            "músic" in n || "music" in n || "audio" in n || "radio" in n -> XmbView.Icon.MUSIC
+            "foto" in n || "imag" in n || "cámara" in n || "camara" in n || "galer" in n -> XmbView.Icon.PHOTO
+            "internet" in n || "web" in n || "naveg" in n || "red" == n || "social" in n -> XmbView.Icon.GLOBE
+            "multi" in n || "vídeo" in n || "video" in n || "pelí" in n || "peli" in n || "serie" in n || "tv" == n -> XmbView.Icon.MEDIA
             "fav" in n -> XmbView.Icon.STAR
             else -> XmbView.Icon.FOLDER
         }
@@ -576,8 +584,10 @@ class MainActivity : ComponentActivity(), XmbView.Host {
             return listOf(
                 XmbView.Item("apps", "Añadir o quitar apps", "Elige qué apps aparecen en el launcher", glyph = XmbView.Icon.PLUS),
                 XmbView.Item("newcat", "Nueva categoría", "Agrupa tus apps como quieras", glyph = XmbView.Icon.FOLDER_PLUS),
-                XmbView.Item("editcats", "Editar categorías", "Renombrar, ordenar o eliminar", glyph = XmbView.Icon.FOLDER),
+                XmbView.Item("editcats", "Editar categorías", "Renombrar, ordenar o eliminar", glyph = XmbView.Icon.FOLDER_EDIT),
                 XmbView.Item("rinsize", "Tamaño de Rin", "Actual: $pct %", glyph = XmbView.Icon.RESIZE),
+                if (sounds.enabled) XmbView.Item("sounds", "Sonidos del menú", "Activados · pulsa para silenciar", glyph = XmbView.Icon.SOUND)
+                else XmbView.Item("sounds", "Sonidos del menú", "Desactivados · pulsa para activar", glyph = XmbView.Icon.MUTE),
                 XmbView.Item("carousel", "Cambiar a vista carrusel", "Tarjetas grandes con carátulas", glyph = XmbView.Icon.LAYOUT)
             )
         }
@@ -595,6 +605,12 @@ class MainActivity : ComponentActivity(), XmbView.Host {
             "editcats" -> chooseCategoryToEdit()
             "rinsize" -> openRinSizeDialog()
             "carousel" -> setViewMode(VIEW_CAROUSEL)
+            "sounds" -> {
+                sounds.enabled = !sounds.enabled
+                prefs.edit().putBoolean(KEY_SOUNDS, sounds.enabled).apply()
+                if (sounds.enabled) sounds.play(XmbView.SOUND_OK)
+                xmb.reload()
+            }
         }
     }
 
@@ -736,6 +752,7 @@ class MainActivity : ComponentActivity(), XmbView.Host {
         val from = if (navIndex in visibleApps.indices && carousel.scrollState != RecyclerView.SCROLL_STATE_IDLE)
             navIndex else adapter.focused.coerceAtLeast(0)
         val target = (from + dir).coerceIn(0, visibleApps.size - 1)
+        if (target != from) sounds.play(XmbView.SOUND_NAV)
         navIndex = target
         val v = layoutManager.findViewByPosition(target)
         if (v != null) {
@@ -748,9 +765,15 @@ class MainActivity : ComponentActivity(), XmbView.Host {
 
     /** L1/R1: "Todos" y luego cada categoría, en ciclo. */
     private fun cycleCategory(dir: Int) {
+        sounds.play(XmbView.SOUND_CAT)
         val ids = listOf<String?>(null) + store.categories.map { it.id }
         val i = ids.indexOf(currentCategory).coerceAtLeast(0)
         selectCategory(ids[(i + dir + ids.size) % ids.size])
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        sounds.release()
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
