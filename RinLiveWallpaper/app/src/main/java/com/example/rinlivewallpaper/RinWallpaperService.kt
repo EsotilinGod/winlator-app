@@ -157,6 +157,7 @@ class RinWallpaperService : WallpaperService() {
             }
         }
 
-        private data class Particle(val x: Float, val y: Float, val speed: Float, val phase: Float)
     }
 }
+
+private data class Particle(val x: Float, val y: Float, val speed: Float, val phase: Float)
