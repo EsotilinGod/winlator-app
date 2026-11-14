@@ -1,0 +1,8 @@
+<resources>
+    <color name="gold">#F2B530</color>
+    <color name="gold_dark">#C98A12</color>
+    <color name="gold_soft">#FFE6A6</color>
+    <color name="ink">#2B2F3A</color>
+    <color name="ink_soft">#6B7080</color>
+    <color name="paper">#F7F8FB</color>
+</resources>

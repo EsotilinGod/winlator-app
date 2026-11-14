@@ -1,0 +1,13 @@
+<resources>
+    <style name="Theme.RinLauncher" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/paper</item>
+        <item name="android:colorAccent">@color/gold_dark</item>
+        <item name="android:colorPrimary">@color/gold</item>
+        <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+    </style>
+    <style name="Dialog.Rin" parent="android:Theme.Material.Light.Dialog.Alert">
+        <item name="android:colorAccent">@color/gold_dark</item>
+    </style>
+</resources>
