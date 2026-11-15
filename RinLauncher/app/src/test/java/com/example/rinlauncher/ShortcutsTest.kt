@@ -62,4 +62,19 @@ class ShortcutsTest {
         assertEquals("xyz.aethersx2.android", launch.component?.packageName)
         assert(launch.flags and Intent.FLAG_GRANT_READ_URI_PERMISSION != 0)
     }
+
+    /** Monitor: cálculo de FPS a partir del contador de fotogramas y script para ADB. */
+    @Test
+    fun gameMonitor() {
+        assertEquals(60, GameMonitorService.fps(1000, 0, 1060, 1000))
+        assertEquals(30, GameMonitorService.fps(1000, 0, 1015, 500))
+        assertEquals(null, GameMonitorService.fps(-1, 0, 1060, 1000))   // primera lectura
+        assertEquals(null, GameMonitorService.fps(1000, 0, 900, 1000))  // contador reiniciado
+        val ctx = ApplicationProvider.getApplicationContext<android.app.Application>()
+        GameMonitorService.writeHelper(ctx)
+        val script = java.io.File(GameMonitorService.dir(ctx), "fps_helper.sh").readText()
+        assert("service call SurfaceFlinger 1013" in script)
+        assert("monitor_on" in script && "echo \$\$ >" in script && "{'" !in script)
+        println(script)
+    }
 }

@@ -27,6 +27,19 @@ Estilo consola tipo XrossMediaBar sobre la escena de Rin (`XmbView.kt`): fila ho
 - Ajustes: añadir/quitar apps, nueva categoría, editar categorías, tamaño de Rin y cambiar a la vista
   carrusel. Desde el carrusel, el botón con barras vuelve al XMB.
 
+## Monitor en juego (v2.6)
+Ajustes → Monitor en juego: cápsula flotante (arrastrable) con **FPS · temperatura de la batería**
+sobre cualquier app (`GameMonitorService.kt`, permiso «Mostrar sobre otras apps»). La temperatura
+cambia a naranja desde 39 °C y a rojo desde 43 °C.
+- La temperatura funciona siempre.
+- Los FPS necesitan permisos de ADB: el launcher escribe `fps_helper.sh` en
+  `/sdcard/Android/data/com.example.rinlauncher/files/` y el PC lo lanza con
+  `adb -d shell "setsid nohup sh /sdcard/Android/data/com.example.rinlauncher/files/fps_helper.sh >/dev/null 2>&1 &"`.
+  El script lee cada 0,5 s el contador de fotogramas de la pantalla (`service call SurfaceFlinger 1013`)
+  solo mientras el monitor está activo. Sin él se muestra «— FPS».
+- Los FPS son los fotogramas que compone la pantalla: con el juego a pantalla completa equivalen a los
+  del juego.
+
 ## Introducción de inicio (v2.5)
 Al arrancar el launcher (no al volver de una app) se muestra una introducción de 7,8 s sincronizada con
 el sonido de encendido (`IntroView.kt`): resplandor, cintas de luz que barren la pantalla, el título

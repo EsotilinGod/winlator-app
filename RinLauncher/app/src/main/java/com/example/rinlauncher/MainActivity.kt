@@ -49,6 +49,7 @@ class MainActivity : ComponentActivity(), XmbView.Host {
         const val VIEW_CAROUSEL = "carousel"
         private const val KEY_SOUNDS = "menu_sounds"
         private const val KEY_BOOT_SOUND = "boot_sound"
+        private const val KEY_MONITOR = "game_monitor"
     }
 
     private lateinit var store: LauncherStore
@@ -208,6 +209,10 @@ class MainActivity : ComponentActivity(), XmbView.Host {
         xmb.onSound = { sounds.play(it) }
         // Sonido de encendido: solo al arrancar el launcher (no al volver de un juego).
         intro = findViewById(R.id.intro)
+        // Script del monitor de FPS (lo lanza el PC por ADB) y monitor activo si se dejó encendido.
+        try { GameMonitorService.writeHelper(this) } catch (_: Exception) {}
+        if (animationsEnabled && prefs.getBoolean(KEY_MONITOR, false) && android.provider.Settings.canDrawOverlays(this))
+            GameMonitorService.start(this)
         if (savedInstanceState == null && animationsEnabled && prefs.getBoolean(KEY_BOOT_SOUND, true)) startIntro()
         scene.rinScale = prefs.getFloat(KEY_RIN_SCALE, 1f)
         carousel = findViewById(R.id.carousel)
@@ -610,6 +615,10 @@ class MainActivity : ComponentActivity(), XmbView.Host {
     override fun onResume() {
         super.onResume()
         goImmersive()
+        if (pendingMonitor) {
+            pendingMonitor = false
+            if (android.provider.Settings.canDrawOverlays(this)) setMonitor(true)
+        }
         // Las apps desinstaladas desaparecen solas.
         val before = store.apps.size
         store.load()
@@ -693,6 +702,9 @@ class MainActivity : ComponentActivity(), XmbView.Host {
                 else XmbView.Item("sounds", "Sonidos del menú", "Desactivados · pulsa para activar", glyph = XmbView.Icon.MUTE),
                 if (prefs.getBoolean(KEY_BOOT_SOUND, true)) XmbView.Item("bootsound", "Introducción de inicio", "Animación y sonido al abrir · activada", glyph = XmbView.Icon.SOUND)
                 else XmbView.Item("bootsound", "Introducción de inicio", "Desactivada · pulsa para activarla", glyph = XmbView.Icon.MUTE),
+                XmbView.Item("monitor", "Monitor en juego",
+                    if (prefs.getBoolean(KEY_MONITOR, false)) "Activado · FPS y temperatura sobre los juegos"
+                    else "Desactivado · muestra FPS y temperatura sobre los juegos", glyph = XmbView.Icon.CHIP),
                 XmbView.Item("carousel", "Cambiar a vista carrusel", "Tarjetas grandes con carátulas", glyph = XmbView.Icon.DISPLAY),
                 XmbView.Item("home", "Usar como launcher predeterminado",
                     if (Shortcuts.isDefaultLauncher(this)) "Activo · accesos directos de emuladores habilitados"
@@ -710,6 +722,7 @@ class MainActivity : ComponentActivity(), XmbView.Host {
         when (item.key) {
             "apps" -> openPicker()
             "shortcut" -> openShortcutMenu()
+            "monitor" -> toggleMonitor()
             "bootsound" -> {
                 val on = !prefs.getBoolean(KEY_BOOT_SOUND, true)
                 prefs.edit().putBoolean(KEY_BOOT_SOUND, on).apply()
@@ -899,6 +912,34 @@ class MainActivity : ComponentActivity(), XmbView.Host {
     }
 
     private var bootPlayer: android.media.MediaPlayer? = null
+
+    // --- Monitor en juego ----------------------------------------------------------------------
+    private var pendingMonitor = false
+
+    private fun toggleMonitor() {
+        val on = !prefs.getBoolean(KEY_MONITOR, false)
+        if (on && !android.provider.Settings.canDrawOverlays(this)) {
+            // Primero el permiso "Mostrar sobre otras apps"; al volver se activa solo.
+            pendingMonitor = true
+            Toast.makeText(this, "Activa «Mostrar sobre otras apps» para Rin Launcher", Toast.LENGTH_LONG).show()
+            startActivity(Intent(android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                android.net.Uri.parse("package:$packageName")))
+            return
+        }
+        setMonitor(on)
+    }
+
+    private fun setMonitor(on: Boolean) {
+        prefs.edit().putBoolean(KEY_MONITOR, on).apply()
+        if (on) {
+            if (android.os.Build.VERSION.SDK_INT >= 33 &&
+                checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED)
+                requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 7)
+            GameMonitorService.start(this)
+            Toast.makeText(this, "Monitor activado. Para ver los FPS, abre el launcher con tu .bat (ver README).", Toast.LENGTH_LONG).show()
+        } else GameMonitorService.stop(this)
+        xmb.reload()
+    }
 
     /** Introducción animada + sonido de encendido. */
     private fun startIntro() {
